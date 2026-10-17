@@ -2,6 +2,8 @@
 
 Repertório organizado por **tema, significado e momento do culto**, **importação rápida pelo link do YouTube ou Spotify**, **cifras** que mudam de tom na hora, **letras** para os cantores, **player** e **gravações de ensaio**, **programação** com setlist, escala e presença, **votação das músicas**, painel **“Para você”** com lembretes e avisos personalizados, **sugestões**, **playlists** e **chat** da equipe — num app leve, bonito e que funciona até sem internet.
 
+**No ar:** [appadoracao.vercel.app](https://appadoracao.vercel.app) · cada envio para o ramo principal publica uma nova versão automaticamente.
+
 ![Telas do app no celular](docs/preview.png)
 
 ---
