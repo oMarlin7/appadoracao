@@ -1,4 +1,4 @@
-import { memo, type ReactNode } from 'react'
+import { memo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
 import { Heart, Music } from 'lucide-react'
 import { prettyAccidentals } from '@/lib/music/theory'
@@ -65,11 +65,13 @@ export const SongCover = memo(function SongCover({
   className,
   rounded,
 }: {
-  song: Pick<Song, 'id' | 'themes'>
+  song: Pick<Song, 'id' | 'themes' | 'coverUrl'>
   size?: number
   className?: string
   rounded?: string
 }) {
+  const [failed, setFailed] = useState<string | null>(null)
+  const photo = song.coverUrl && failed !== song.coverUrl ? song.coverUrl : null
   const [a, b] = coverColors(song)
   const h = hashString(song.id + 'x')
   const theme = song.themes[0] ? THEME_BY_ID[song.themes[0]] : undefined
@@ -91,6 +93,17 @@ export const SongCover = memo(function SongCover({
       <div className="absolute inset-0 grid place-items-center">
         <Icon style={{ color: ink(a), width: size * 0.42, height: size * 0.42 }} strokeWidth={size > 70 ? 1.6 : 1.9} />
       </div>
+      {photo && (
+        <img
+          src={photo}
+          alt=""
+          loading="lazy"
+          draggable={false}
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(photo)}
+          className="absolute inset-0 size-full object-cover"
+        />
+      )}
     </div>
   )
 })

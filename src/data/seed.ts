@@ -1,5 +1,5 @@
 import { addDays, toLocalDateString } from '@/lib/utils'
-import { TABLES, type DataSnapshot, type Favorite, type Message, type Playlist, type Profile, type Reaction, type Service, type Song, type SongPref, type Suggestion } from '@/types'
+import { TABLES, type Attendance, type CustomTheme, type DataSnapshot, type Favorite, type Message, type Playlist, type Profile, type Reaction, type Recording, type Service, type Song, type SongPref, type Suggestion } from '@/types'
 import { buildSeedSongs } from './songs'
 
 /**
@@ -295,6 +295,69 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     { id: 'demo-julia:ex-santo-es-tu', userId: 'demo-julia', songId: 'ex-santo-es-tu', key: 'C', capo: null, updatedAt: created },
   ]
   for (const p of prefs) out.song_prefs[p.id] = p
+
+  // ---- Presença ------------------------------------------------------------------------
+  const presence: Array<[string, string, Attendance['status'], string | null, string]> = [
+    ['svc-passado-1', 'demo-julia', 'presente', null, ''],
+    ['svc-passado-1', 'demo-lucas', 'presente', null, ''],
+    ['svc-passado-1', 'demo-gabriel', 'ausente', 'saude', 'Gripado, avisei no grupo na sexta.'],
+    ['svc-passado-1', 'demo-pedro', 'presente', null, ''],
+    ['svc-passado-2', 'demo-ana', 'presente', null, ''],
+    ['svc-passado-2', 'demo-beatriz', 'presente', null, ''],
+    ['svc-passado-3', 'demo-ana', 'presente', null, ''],
+    ['svc-passado-3', 'demo-lucas', 'presente', null, ''],
+    ['svc-passado-3', 'demo-rafael', 'ausente', null, ''],
+    ['svc-passado-3', 'demo-gabriel', 'presente', null, ''],
+    ['svc-ensaio', 'demo-ana', 'confirmado', null, ''],
+    ['svc-ensaio', 'demo-lucas', 'confirmado', null, ''],
+    ['svc-ensaio', 'demo-gabriel', 'confirmado', null, ''],
+    ['svc-celebracao', 'demo-lucas', 'confirmado', null, ''],
+    ['svc-celebracao', 'demo-beatriz', 'confirmado', null, ''],
+    ['svc-celebracao', 'demo-rafael', 'ausente', 'viagem', 'Viagem a trabalho, volto na segunda. Já falei com o Pedro para cobrir o baixo.'],
+  ]
+  for (const [serviceId, userId, status, reason, note] of presence) {
+    if (!out.services[serviceId]) continue
+    const svc = out.services[serviceId]
+    const markedBy = status === 'presente' || (status === 'ausente' && !note) ? svc.leaderId : userId
+    const a: Attendance = { id: `${serviceId}:${userId}`, serviceId, userId, status, reason, note, markedBy, createdAt: svc.updatedAt, updatedAt: svc.updatedAt }
+    out.attendance[a.id] = a
+  }
+
+  // ---- Gravações de ensaio (áudio sintetizado no aparelho) ----------------------------------
+  const rec = (id: string, title: string, chords: string, bpm: number, serviceId: string | null, songId: string | null, by: string, daysAgo: number): Recording => ({
+    id,
+    title,
+    serviceId,
+    songId,
+    storagePath: `exemplo/${chords}@${bpm}.wav`,
+    mimeType: 'audio/wav',
+    durationSec: Math.round((8 * 4 * 60) / bpm + 1.5),
+    sizeBytes: null,
+    createdBy: by,
+    createdAt: iso(at(now, -daysAgo, 17, 10)),
+    updatedAt: iso(at(now, -daysAgo, 17, 10)),
+  })
+  const recordings = [
+    rec('rec-1', 'Ensaio geral · Celebrai', 'G-C-Em-D', 128, 'svc-passado-1', 'ex-celebrai', 'demo-julia', 8),
+    rec('rec-2', 'Voz e violão · Tua Bondade', 'A-E-F#m-D', 72, null, 'ex-tua-bondade', 'demo-lucas', 3),
+    rec('rec-3', 'Passagem de som · Santo És Tu', 'E-B-C#m-A', 68, 'svc-passado-3', 'ex-santo-es-tu', 'demo-ana', 15),
+  ]
+  for (const r of recordings) if (!r.songId || out.songs[r.songId]) out.recordings[r.id] = r
+
+  // ---- Tema criado pela equipe --------------------------------------------------------------
+  const youth: CustomTheme = {
+    id: 'tema-juventude',
+    name: 'Juventude & Chamado',
+    description: 'Propósito, identidade e chamado — para cultos de jovens.',
+    icon: 'flame',
+    color: 'coral',
+    keywords: ['jovem', 'jovens', 'juventude', 'geracao', 'chamado', 'proposito', 'identidade', 'eis-me aqui'],
+    createdBy: 'demo-julia',
+    createdAt: created,
+    updatedAt: created,
+  }
+  out.custom_themes[youth.id] = youth
+  if (out.songs['ex-eis-me-aqui']) out.songs['ex-eis-me-aqui'].themes = [...out.songs['ex-eis-me-aqui'].themes, youth.id]
 
   return out
 }

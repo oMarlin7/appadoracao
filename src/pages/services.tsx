@@ -11,6 +11,7 @@ import {
   GripVertical,
   Lightbulb,
   MessageCircle,
+  Mic,
   Mic2,
   Music,
   Pencil,
@@ -31,6 +32,8 @@ import { KeyBadge, MomentPill, SongCover } from '@/components/song-bits'
 import { Button, IconButton, LinkButton } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
 import { Card, Chip, EmptyState, SectionTitle, Segmented, Textarea } from '@/components/ui/primitives'
+import { ServiceAttendance } from '@/components/attendance'
+import { AddRecordingSheet, RecordingRow } from '@/components/media'
 import { Sheet, confirm } from '@/components/ui/sheet'
 import {
   addToService,
@@ -465,6 +468,38 @@ function AutoSetlistSheet({ service, open, onClose }: { service: Service; open: 
   )
 }
 
+function ServiceRecordings({ service }: { service: Service }) {
+  const recordings = useRows('recordings')
+    .filter((r) => r.serviceId === service.id)
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+  const [open, setOpen] = useState(false)
+  return (
+    <section className="mt-8">
+      <SectionTitle
+        title="Gravações"
+        subtitle={recordings.length ? 'Para estudar em casa — o áudio continua tocando enquanto você navega.' : undefined}
+        action={
+          <Button variant="ghost" size="sm" icon={Mic} onClick={() => setOpen(true)}>
+            Gravar / enviar
+          </Button>
+        }
+      />
+      {recordings.length ? (
+        <Card className="divide-y divide-line p-1.5">
+          {recordings.map((r) => (
+            <RecordingRow key={r.id} rec={r} showSong />
+          ))}
+        </Card>
+      ) : (
+        <button type="button" onClick={() => setOpen(true)} className="flex w-full items-center gap-3 rounded-3xl border border-dashed border-surface-3 p-4 text-left text-[14px] font-semibold text-muted hover:bg-surface-2">
+          <Mic className="size-5" /> Grave o ensaio pelo celular para a equipe ouvir depois.
+        </button>
+      )}
+      <AddRecordingSheet open={open} onClose={() => setOpen(false)} serviceId={service.id} />
+    </section>
+  )
+}
+
 function ServiceSuggestions({ service, canManage }: { service: Service; canManage: boolean }) {
   const me = useMe()
   const suggestions = useRows('suggestions')
@@ -756,6 +791,11 @@ function ServiceView({ service }: { service: Service }) {
             </Card>
           )}
         </section>
+
+        {/* Presença dos outros: só o líder ou quem ministra o culto (mesma regra do banco). */}
+        <ServiceAttendance service={service} canManage={me?.role === 'admin' || service.leaderId === me?.id} />
+
+        <ServiceRecordings service={service} />
 
         <ServiceSuggestions service={service} canManage={canManage} />
 

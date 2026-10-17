@@ -6,11 +6,15 @@ import { enqueue } from './sync'
 import type { Pastel } from './taxonomy'
 import { normalizeSearch, nowIso, todayString, uid } from './utils'
 import type {
+  Attendance,
+  AttendanceStatus,
+  CustomTheme,
   Id,
   Message,
   Playlist,
   Profile,
   Reaction,
+  Recording,
   Service,
   SetlistItem,
   Song,
@@ -89,6 +93,15 @@ function cascade(table: TableName, id: Id) {
   else useData.getState().removeLocal(table, id)
 }
 
+/** Igual ao `cascade`, para referências que viram vazias (on delete set null). */
+function detach(id: Id, patch: Partial<Recording>) {
+  const r = getData().recordings[id]
+  if (!r) return
+  const next = { ...r, ...patch }
+  if (backend.mode === 'demo') void save('recordings', next)
+  else useData.getState().upsertLocal('recordings', next)
+}
+
 function me(): Id {
   const id = currentUserId()
   if (!id) throw new Error('Entre na sua conta para continuar.')
@@ -118,6 +131,8 @@ export function newSong(partial: Partial<Song> = {}): Song {
     content: '',
     notes: '',
     youtubeUrl: null,
+    spotifyUrl: null,
+    coverUrl: null,
     createdBy: currentUserId(),
     createdAt: now,
     updatedAt: now,
@@ -142,6 +157,7 @@ export async function deleteSong(id: Id): Promise<boolean> {
   if (!ok) return false
   for (const f of Object.values(data.favorites)) if (f.songId === id) cascade('favorites', f.id)
   for (const p of Object.values(data.song_prefs)) if (p.songId === id) cascade('song_prefs', p.id)
+  for (const r of Object.values(data.recordings)) if (r.songId === id) detach(r.id, { songId: null })
   for (const s of Object.values(data.suggestions))
     if (s.songId === id) {
       cascade('suggestions', s.id)
@@ -271,13 +287,15 @@ export async function saveService(service: Service): Promise<boolean> {
 export async function deleteService(id: Id): Promise<boolean> {
   const data = getData()
   const ok = await destroy('services', id)
-  if (ok)
-    for (const s of Object.values(data.suggestions))
-      if (s.serviceId === id) {
-        cascade('suggestions', s.id)
-        for (const r of Object.values(data.reactions)) if (r.targetId === s.id) cascade('reactions', r.id)
-      }
-  return ok
+  if (!ok) return false
+  for (const s of Object.values(data.suggestions))
+    if (s.serviceId === id) {
+      cascade('suggestions', s.id)
+      for (const r of Object.values(data.reactions)) if (r.targetId === s.id) cascade('reactions', r.id)
+    }
+  for (const a of Object.values(data.attendance)) if (a.serviceId === id) cascade('attendance', a.id)
+  for (const r of Object.values(data.recordings)) if (r.serviceId === id) detach(r.id, { serviceId: null })
+  return true
 }
 
 export async function updateServiceItems(serviceId: Id, items: SetlistItem[]): Promise<boolean> {
@@ -398,7 +416,7 @@ export async function deleteMessage(id: Id) {
 // Perfil, equipe e configurações
 // ---------------------------------------------------------------------------
 
-export async function updateMyProfile(patch: Partial<Pick<Profile, 'name' | 'functions' | 'color' | 'bio'>>) {
+export async function updateMyProfile(patch: Partial<Pick<Profile, 'name' | 'functions' | 'color' | 'bio' | 'avatarUrl'>>) {
   const p = getData().profiles[me()]
   if (!p) return false
   return save('profiles', { ...p, ...patch, updatedAt: nowIso() })
@@ -419,6 +437,127 @@ export async function updateTeam(patch: Partial<Omit<TeamSettings, 'id'>>) {
     updatedAt: nowIso(),
   }
   return save('team_settings', { ...current, ...patch, id: 'team', updatedAt: nowIso() })
+}
+
+// ---------------------------------------------------------------------------
+// Presença
+// ---------------------------------------------------------------------------
+
+export const attendanceId = (serviceId: Id, userId: Id) => `${serviceId}:${userId}`
+
+export async function setAttendance(
+  serviceId: Id,
+  userId: Id,
+  patch: { status: AttendanceStatus; reason?: string | null; note?: string },
+): Promise<boolean> {
+  const id = attendanceId(serviceId, userId)
+  const prev = getData().attendance[id]
+  const now = nowIso()
+  const absent = patch.status === 'ausente'
+  const row: Attendance = {
+    id,
+    serviceId,
+    userId,
+    status: patch.status,
+    // Ao voltar para "presente/confirmado", a justificativa antiga deixa de valer.
+    reason: absent ? (patch.reason !== undefined ? patch.reason : (prev?.reason ?? null)) : null,
+    note: absent ? (patch.note !== undefined ? patch.note : (prev?.note ?? '')).trim() : '',
+    markedBy: currentUserId(),
+    createdAt: prev?.createdAt ?? now,
+    updatedAt: now,
+  }
+  return save('attendance', row)
+}
+
+export async function clearAttendance(serviceId: Id, userId: Id) {
+  return destroy('attendance', attendanceId(serviceId, userId))
+}
+
+// ---------------------------------------------------------------------------
+// Gravações de ensaio
+// ---------------------------------------------------------------------------
+
+const EXT: Record<string, string> = { 'audio/webm': 'webm', 'audio/ogg': 'ogg', 'audio/mp4': 'm4a', 'audio/mpeg': 'mp3', 'audio/wav': 'wav', 'audio/x-wav': 'wav', 'audio/aac': 'aac', 'video/mp4': 'mp4', 'video/webm': 'webm', 'video/quicktime': 'mov' }
+
+export async function addRecording(input: {
+  file: Blob
+  title: string
+  serviceId?: Id | null
+  songId?: Id | null
+  durationSec?: number | null
+  fileName?: string
+}): Promise<Id | null> {
+  const userId = me()
+  const id = uid()
+  const mimeType = (input.file.type || 'audio/webm').split(';')[0]
+  const ext = EXT[mimeType] ?? input.fileName?.split('.').pop()?.toLowerCase() ?? 'audio'
+  const storagePath = `${userId}/${id}.${ext}`
+  try {
+    await backend.uploadFile(storagePath, input.file, mimeType)
+  } catch (e) {
+    toast.error('Não foi possível enviar a gravação', { description: isNetworkError(e) ? 'Sem conexão. Tente de novo quando a internet voltar.' : errorMessage(e) })
+    return null
+  }
+  const now = nowIso()
+  const row: Recording = {
+    id,
+    title: input.title.trim() || 'Gravação de ensaio',
+    serviceId: input.serviceId ?? null,
+    songId: input.songId ?? null,
+    storagePath,
+    mimeType,
+    durationSec: input.durationSec ? Math.round(input.durationSec) : null,
+    sizeBytes: input.file.size,
+    createdBy: userId,
+    createdAt: now,
+    updatedAt: now,
+  }
+  const ok = await save('recordings', row)
+  if (!ok) void backend.removeFile(storagePath)
+  return ok ? id : null
+}
+
+export async function updateRecording(id: Id, patch: Partial<Pick<Recording, 'title' | 'serviceId' | 'songId'>>) {
+  const r = getData().recordings[id]
+  if (!r) return false
+  return save('recordings', { ...r, ...patch, updatedAt: nowIso() })
+}
+
+export async function deleteRecording(id: Id) {
+  const r = getData().recordings[id]
+  if (!r) return true
+  const ok = await destroy('recordings', id)
+  if (ok && !r.storagePath.startsWith('exemplo/')) void backend.removeFile(r.storagePath).catch(() => {})
+  return ok
+}
+
+// ---------------------------------------------------------------------------
+// Temas da equipe
+// ---------------------------------------------------------------------------
+
+export async function saveCustomTheme(input: Partial<CustomTheme> & Pick<CustomTheme, 'name'>): Promise<Id | null> {
+  const prev = input.id ? getData().custom_themes[input.id] : undefined
+  const now = nowIso()
+  const row: CustomTheme = {
+    id: prev?.id ?? `tema-${uid()}`,
+    name: input.name.trim(),
+    description: (input.description ?? prev?.description ?? '').trim(),
+    icon: input.icon ?? prev?.icon ?? 'sparkles',
+    color: input.color ?? prev?.color ?? 'lavender',
+    keywords: (input.keywords ?? prev?.keywords ?? []).map((k) => k.trim()).filter(Boolean),
+    createdBy: prev?.createdBy ?? currentUserId(),
+    createdAt: prev?.createdAt ?? now,
+    updatedAt: now,
+  }
+  return (await save('custom_themes', row)) ? row.id : null
+}
+
+/** Exclui o tema e tira ele das músicas que o usavam. */
+export async function deleteCustomTheme(id: Id) {
+  const songs = Object.values(getData().songs).filter((s) => s.themes.includes(id))
+  const ok = await destroy('custom_themes', id)
+  if (ok) for (const s of songs) void save('songs', { ...s, themes: s.themes.filter((t) => t !== id), updatedAt: nowIso() })
+  return ok
 }
 
 // ---------------------------------------------------------------------------

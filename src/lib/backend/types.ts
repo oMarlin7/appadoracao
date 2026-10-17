@@ -35,6 +35,13 @@ export interface Backend {
   subscribe(onChange: (e: ChangeEvent) => void, onResync: () => void): () => void
   upsert<T extends TableName>(table: T, row: Row<T>): Promise<void>
   remove(table: TableName, id: string): Promise<void>
+  /** Arquivos (gravações de ensaio). No demo ficam no IndexedDB; no Supabase, no Storage. */
+  uploadFile(path: string, file: Blob, contentType: string): Promise<void>
+  /** Endereço temporário para tocar/baixar o arquivo. */
+  fileUrl(path: string): Promise<string>
+  removeFile(path: string): Promise<void>
+  /** Chama uma função do servidor (Supabase Edge Function). Sem servidor, lança erro. */
+  invoke<T>(fn: string, body: Record<string, unknown>): Promise<T>
 }
 
 export class AppError extends Error {

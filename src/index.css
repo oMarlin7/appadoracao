@@ -27,6 +27,7 @@
   --chord: #6252ee;
   --ring: rgb(109 93 245 / 0.35);
   --glass: rgb(255 255 255 / 0.78);
+  --glass-page: rgb(246 245 251 / 0.86);
 
   --sh-1: 0 1px 2px rgb(30 27 75 / 0.04), 0 4px 14px -6px rgb(30 27 75 / 0.1);
   --sh-2: 0 2px 6px rgb(30 27 75 / 0.05), 0 18px 40px -16px rgb(30 27 75 / 0.22);
@@ -84,6 +85,7 @@
   --chord: #b9afff;
   --ring: rgb(165 151 255 / 0.4);
   --glass: rgb(22 22 37 / 0.78);
+  --glass-page: rgb(13 13 23 / 0.86);
 
   --sh-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px -8px rgb(0 0 0 / 0.55);
   --sh-2: 0 2px 6px rgb(0 0 0 / 0.4), 0 20px 44px -18px rgb(0 0 0 / 0.75);
@@ -279,6 +281,13 @@
 
 @utility glass {
   background: var(--glass);
+  -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  backdrop-filter: saturate(1.6) blur(18px);
+}
+
+/* Vidro da cor do fundo da página (barras fixas que não devem parecer um bloco à parte) */
+@utility glass-page {
+  background: var(--glass-page);
   -webkit-backdrop-filter: saturate(1.6) blur(18px);
   backdrop-filter: saturate(1.6) blur(18px);
 }

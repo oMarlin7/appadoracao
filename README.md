@@ -1,6 +1,6 @@
 # Adoração · app do ministério de louvor
 
-Repertório organizado por **tema, significado e momento do culto**, **cifras** que mudam de tom na hora, **letras** para os cantores, **cultos com setlist e escala**, **sugestões**, **playlists** e **chat** da equipe — num app leve, bonito e que funciona até sem internet.
+Repertório organizado por **tema, significado e momento do culto**, **importação rápida pelo link do YouTube ou Spotify**, **cifras** que mudam de tom na hora, **letras** para os cantores, **player** e **gravações de ensaio**, **cultos com setlist, escala e presença**, **sugestões**, **playlists** e **chat** da equipe — num app leve, bonito e que funciona até sem internet.
 
 ![Telas do app no celular](docs/preview.png)
 
@@ -12,7 +12,16 @@ Repertório organizado por **tema, significado e momento do culto**, **cifras** 
 - **Escolha rápida por momento**: toque em *Abertura*, *Louvor*, *Adoração*, *Ministração*, *Ceia*, *Ofertas*, *Apelo*… e veja na hora as músicas que funcionam ali.
 - **Assistente de repertório**: entende pedidos como *“3 músicas de gratidão animadas para a abertura”* ou *“algo sobre a cruz para a ceia”*. Explica o porquê de cada sugestão: momento, tema, ritmo, **tom que emenda com a música anterior**, se a equipe já conhece e se foi tocada recentemente.
 - **Setlist automático**: monta abertura → louvor → adoração → ministração a partir do tema da pregação, encadeando os tons.
-- **Acervo organizado** por 19 temas (Adoração, Cruz & Sangue, Espírito Santo, Graça & Perdão, Vitória, Natal…), 11 momentos do culto, ritmo, tom, etiquetas, significado e referências bíblicas. Busca sem acento por título, artista, **trecho da letra** ou referência (“sl 23” acha Salmos 23).
+- **Acervo organizado** por 35 temas em grupos (Quem Deus é, Obra de Cristo, Nossa resposta, Vida com Deus, Espírito & Igreja, Datas) — de *Adoração* e *Cruz & Sangue* a temas bem específicos como *Fidelidade de Deus*, *Nome de Jesus*, *Arrependimento*, *Refúgio & Proteção*, *Família*, *Volta de Jesus* e *Recomeço* — mais os **temas criados pela própria equipe** (com cor, ícone e palavras que o app reconhece nas letras). Também 11 momentos do culto, ritmo, tom, etiquetas, significado e referências bíblicas. Busca sem acento por título, artista, **trecho da letra** ou referência (“sl 23” acha Salmos 23).
+
+**Importação rápida (o jeito principal de cadastrar)**
+1. **Cole o link do YouTube ou do Spotify**: título, artista, **capa** e o **player** vêm na hora.
+2. **Cole a cifra** copiada (o app tem um botão que já procura a cifra pelo nome): ele separa acordes, letra e seções e **descobre o tom**.
+3. **BPM no toque**: dê play no vídeo dentro do app e toque no ritmo.
+4. **Ficha automática**: temas, momentos do culto, ritmo e um rascunho do significado. Com a função de IA ligada (opcional, veja abaixo), o app escreve o significado, sugere referências bíblicas e refina temas e momentos a partir da letra colada.
+- **Vários links de uma vez**: cole uma lista de links e o acervo ganha várias músicas com capa e player (marcadas como *sem-cifra* para completar depois).
+
+> Letras e cifras têm direitos autorais e **não** vêm do YouTube/Spotify — por isso o app não as baixa nem as inventa: a equipe cola a cifra que já usa e o app organiza e analisa o resto.
 
 **Cifras e letras**
 - Transposição instantânea com a grafia correta (B♭ em Fá, A♯ em Mi; diminutos de passagem com ♯).
@@ -23,8 +32,17 @@ Repertório organizado por **tema, significado e momento do culto**, **cifras** 
 - **Modo ao vivo**: tela cheia e escura, uma música por vez, passa com gesto, setas do teclado ou **pedal Bluetooth**.
 - **Colar cifra**: copie do Cifra Club (ou de um PDF/WhatsApp) e o app separa acordes, letra e seções, lê título/artista/tom/capo, **detecta o tom** pelos acordes e sugere temas e momentos pela letra.
 
+**Ouvir e ensaiar**
+- **Player dentro do app**: o vídeo do YouTube ou a faixa do Spotify tocam na própria página da música — dá para ouvir com a cifra aberta.
+- **Gravações de ensaio**: grave pelo microfone do celular ou envie um áudio/vídeo (MP3, M4A, WAV…), ligado ao culto e/ou à música. O **player fixo** continua tocando enquanto você navega, com velocidade mais lenta para estudar (0,75×), repetição e avanço de 10 s. Tela **Ensaios** com tudo organizado por culto.
+
+**Presença**
+- Cada membro **confirma** que vai ou **avisa a ausência com justificativa** (trabalho, saúde, viagem, família, estudos ou outro motivo + texto).
+- No dia, o líder (ou quem ministra) marca **presente/ausente** — com “todos presentes” em um toque.
+- Tela **Presença**: ausências avisadas para os próximos cultos, **frequência** de cada membro (30/90 dias ou tudo) e histórico com as justificativas.
+
 **Equipe**
-- Contas individuais com e-mail e senha, liberadas por **código de convite**.
+- Contas individuais com e-mail e senha, liberadas por **código de convite**, com **foto de perfil**.
 - **Cultos** com setlist (arraste para reordenar), observações por música, alerta de saltos de tom e **escala** (quem ministra, canta e toca).
 - **Sugestões para o culto**: qualquer membro sugere, a equipe apoia (👍) e o líder aceita — a música entra no setlist.
 - **Favoritas** e **playlists** (só suas ou compartilhadas com a equipe).
@@ -57,12 +75,14 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 
 ### 1. Criar o banco no Supabase
 1. Crie uma conta em supabase.com → **New project** (região *South America (São Paulo)*).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**.
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios).
 3. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public**.
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
 5. Opcional: em **Authentication → Sign In / Providers → Email**, desligue *Confirm email* se não quiser que cada membro confirme o e-mail antes de entrar (o código de convite já protege o cadastro).
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
+
+> **Já tinha o app no ar?** Rode só o arquivo `…_v2_midia_presenca.sql` no SQL Editor. Até lá o app continua funcionando, mas sem salvar presença, gravações, temas novos, fotos e capas.
 
 ### 2. Publicar o app
 **Vercel**: *Add New → Project* → importe este repositório → em *Environment Variables* adicione:
@@ -76,6 +96,20 @@ VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
 
 Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env.local` e preencha as mesmas variáveis.
 
+### Opcional: dados completos dos links e IA para a ficha da música
+Sem isto, a importação já funciona (o navegador busca título e capa direto no YouTube/Spotify quando possível). Com a função do servidor, o Spotify também traz o **artista** e a **duração**, e — com uma chave da API do Claude — o app escreve o **significado**, sugere **referências bíblicas** e refina **temas e momentos** a partir da letra colada.
+
+Com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
+
+```bash
+supabase login
+supabase link --project-ref SEU-PROJETO
+supabase functions deploy importar-musica
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   # opcional: liga a análise com IA
+```
+
+A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts). Ela só é chamada por membros logados, não baixa letras e usa apenas o texto que a equipe colou.
+
 ### 3. Chamar a equipe
 1. **O líder cria a conta primeiro** — o primeiro cadastro vira líder automaticamente.
 2. Em **Equipe**, toque em **Gerar novo** código e depois em **Enviar convite** (vai pronto para o WhatsApp).
@@ -85,7 +119,7 @@ Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env
 O líder pode promover outros líderes na tela **Equipe**. Para tirar alguém da equipe, exclua o usuário no painel do Supabase (*Authentication → Users*): o perfil sai junto com as favoritas, playlists e mensagens dessa pessoa (as músicas e cultos que ela cadastrou continuam).
 
 ### 4. Montar o acervo
-- **Nova música → Colar cifra → Organizar**, confira temas, momentos e significado, e salve.
+- **Nova música → cole o link do YouTube/Spotify → Colar cifra copiada → toque o BPM**, confira a ficha e salve. Para começar rápido, use **Vários links de uma vez** e complete as cifras depois (busque por *sem-cifra* no acervo).
 - Quer começar com exemplos? **Ajustes → Adicionar músicas de exemplo** (e depois *Remover músicas de exemplo*).
 - Testou no modo demonstração e quer levar as músicas? No demo, **Ajustes → Exportar acervo**; no app oficial, **Ajustes → Importar acervo**.
 
@@ -137,14 +171,20 @@ src/
   lib/backend/     modo demonstração (IndexedDB) e Supabase, com o mesmo contrato
   lib/sync.ts      cache offline, fila de alterações e tempo real
   lib/actions.ts   todas as ações do app (atualização otimista)
-  lib/taxonomy.ts  temas, momentos do culto, ritmos e funções
+  lib/taxonomy.ts  temas (do app + da equipe), momentos do culto, ritmos, funções e motivos de ausência
+  lib/media.ts     links do YouTube/Spotify, player embutido e título do vídeo → música/artista
+  lib/song-import.ts importação rápida: dados do link e análise da letra (local ou IA)
+  lib/player.ts    player das gravações (continua tocando entre as telas)
+  lib/recorder.ts  gravação pelo microfone
+  lib/attendance.ts cálculo de presença e frequência
   pages/           telas
   components/      componentes visuais (cifra, capas, sheets, layout…)
   data/            acervo inicial e equipe de demonstração
-supabase/migrations/  esquema do banco com regras de segurança por linha
+supabase/migrations/  esquema do banco com regras de segurança por linha (init + v2)
+supabase/functions/   função importar-musica (dados dos links e análise com IA)
 ```
 
-**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (favoritas, mensagens, playlists, preferências); o acervo e os cultos são colaborativos; excluir é do autor ou do líder; ninguém se promove a líder sozinho e a equipe nunca fica sem líder.
+**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (favoritas, mensagens, playlists, preferências, a própria presença); o acervo e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder.
 
 ## Próximos passos sugeridos
 
@@ -152,4 +192,4 @@ supabase/migrations/  esquema do banco com regras de segurança por linha
 - Notificações push (novo culto, escala, menções no chat).
 - Diagramas de acordes para violão e teclado.
 - Estatísticas do ano (músicas mais tocadas, quem mais ministrou).
-- Áudios de referência e multitracks por música.
+- Multitracks por música (voz, base, click separados).

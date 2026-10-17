@@ -9,7 +9,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Copy,
-  ExternalLink,
+  Headphones,
   Heart,
   Lightbulb,
   ListPlus,
@@ -29,6 +29,7 @@ import { AddToPlaylistSheet, AddToServiceSheet, SuggestSheet } from '@/component
 import { Avatar, AvatarStack } from '@/components/avatar'
 import { ChordSheet } from '@/components/chord-sheet'
 import { KeyPickerSheet } from '@/components/key-picker'
+import { ListenPanel, songMediaLinks } from '@/components/media'
 import { Page, TopBar } from '@/components/layout'
 import { KeyBadge, MomentPill, SongCover } from '@/components/song-bits'
 import { Button, IconButton, LinkButton } from '@/components/ui/button'
@@ -120,6 +121,7 @@ function SongView({ song }: { song: Song }) {
   const me = useMe()
   const canDelete = me?.role === 'admin' || song.createdBy === me?.id
   const seq = useSequence(song.id)
+  const recordingCount = useRows('recordings').filter((r) => r.songId === song.id).length
   const sheet = useSongSheet(song, { serviceKey: seq?.serviceKey })
   const defaultView = useDefaultView(sheet.hasChords)
   const [tab, setTab] = useState<Tab>(defaultView)
@@ -132,6 +134,8 @@ function SongView({ song }: { song: Song }) {
   const setSetting = useSettings((s) => s.set)
   const accidentals = useSettings((s) => s.accidentals)
   const [scrolling, setScrolling] = useState(false)
+  const [listening, setListening] = useState(false)
+  const hasMedia = songMediaLinks(song).length > 0 || recordingCount > 0
   const [sheetOpen, setSheetOpen] = useState<null | 'key' | 'playlist' | 'service' | 'suggest'>(null)
   useAutoScroll(scrolling, scrollSpeed)
   useWakeLock(keepAwake)
@@ -269,11 +273,22 @@ function SongView({ song }: { song: Song }) {
               { value: 'sobre' as Tab, label: 'Sobre' },
             ]}
           />
-          <div className="hidden items-center gap-1.5 sm:flex">
-            <Button variant="soft" size="sm" icon={Lightbulb} onClick={() => setSheetOpen('suggest')}>
+          <div className="flex items-center gap-1.5">
+            {tab !== 'sobre' && (
+              <Button
+                variant={listening ? 'primary' : hasMedia ? 'soft' : 'outline'}
+                size="sm"
+                icon={Headphones}
+                aria-expanded={listening}
+                onClick={() => setListening((v) => !v)}
+              >
+                Ouvir
+              </Button>
+            )}
+            <Button variant="soft" size="sm" icon={Lightbulb} onClick={() => setSheetOpen('suggest')} className="hidden sm:inline-flex">
               Sugerir
             </Button>
-            <Button variant="outline" size="sm" icon={CalendarPlus} onClick={() => setSheetOpen('service')}>
+            <Button variant="outline" size="sm" icon={CalendarPlus} onClick={() => setSheetOpen('service')} className="hidden sm:inline-flex">
               Culto
             </Button>
           </div>
@@ -284,6 +299,7 @@ function SongView({ song }: { song: Song }) {
             <AboutTab song={song} />
           ) : (
             <>
+              {listening && <ListenPanel song={song} className="mb-7" />}
               {tab === 'cifra' && canTranspose && (sheet.capo > 0 || sheet.source !== 'original') && (
                 <div className="mb-4 flex flex-wrap items-center gap-2 text-[13px] text-muted">
                   <span className="font-semibold">{KEY_SOURCE_LABEL[sheet.source]}:</span>
@@ -492,15 +508,7 @@ function AboutTab({ song }: { song: Song }) {
         </Card>
       )}
 
-      {song.youtubeUrl && (
-        <a href={song.youtubeUrl} target="_blank" rel="noreferrer" className="flex items-center gap-3 rounded-3xl border border-line bg-surface p-4 shadow-card">
-          <span className="grid size-11 place-items-center rounded-2xl bg-rose text-rose-ink">
-            <Play className="size-5 fill-current" />
-          </span>
-          <span className="flex-1 text-[15px] font-bold text-ink">Ouvir referência</span>
-          <ExternalLink className="size-4 text-muted" />
-        </a>
-      )}
+      <ListenPanel song={song} />
 
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">

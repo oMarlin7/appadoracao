@@ -11,6 +11,8 @@ export interface Profile {
   functions: string[]
   color: Pastel
   bio: string
+  /** Foto de perfil (imagem pequena já reduzida no aparelho, em data URL). */
+  avatarUrl?: string | null
   createdAt: string
   updatedAt: string
 }
@@ -36,6 +38,9 @@ export interface Song {
   /** Observações de arranjo da equipe. */
   notes: string
   youtubeUrl: string | null
+  spotifyUrl?: string | null
+  /** Capa: link da imagem (YouTube/Spotify) ou foto enviada (data URL). Sem capa = arte gerada. */
+  coverUrl?: string | null
   createdBy: Id | null
   createdAt: string
   updatedAt: string
@@ -134,6 +139,57 @@ export interface Message {
   editedAt: string | null
 }
 
+/**
+ * Presença num culto/ensaio. Antes do dia o membro confirma ou avisa a ausência (com
+ * justificativa); no dia o líder marca quem esteve presente.
+ */
+export type AttendanceStatus = 'confirmado' | 'presente' | 'ausente'
+
+export interface Attendance {
+  /** `${serviceId}:${userId}` — uma linha por membro em cada culto. */
+  id: Id
+  serviceId: Id
+  userId: Id
+  status: AttendanceStatus
+  /** Motivo da ausência (ids de ABSENCE_REASONS). */
+  reason: string | null
+  /** Justificativa escrita. */
+  note: string
+  markedBy: Id | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Gravação de ensaio (o áudio fica no armazenamento de arquivos). */
+export interface Recording {
+  id: Id
+  title: string
+  serviceId: Id | null
+  songId: Id | null
+  storagePath: string
+  mimeType: string
+  durationSec: number | null
+  sizeBytes: number | null
+  createdBy: Id | null
+  createdAt: string
+  updatedAt: string
+}
+
+/** Tema criado pela equipe, além dos temas que já vêm no app. */
+export interface CustomTheme {
+  id: Id
+  name: string
+  description: string
+  /** Chave de THEME_ICONS. */
+  icon: string
+  color: Pastel
+  /** Palavras que indicam o tema numa letra (para as sugestões automáticas). */
+  keywords: string[]
+  createdBy: Id | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface TeamSettings {
   id: 'team'
   name: string
@@ -153,6 +209,9 @@ export interface Tables {
   reactions: Reaction
   messages: Message
   team_settings: TeamSettings
+  attendance: Attendance
+  recordings: Recording
+  custom_themes: CustomTheme
 }
 
 export type TableName = keyof Tables
@@ -169,6 +228,9 @@ export const TABLES: TableName[] = [
   'reactions',
   'messages',
   'team_settings',
+  'attendance',
+  'recordings',
+  'custom_themes',
 ]
 
 export type DataSnapshot = { [K in TableName]: Record<Id, Tables[K]> }

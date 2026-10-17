@@ -40,7 +40,7 @@ export function KeyGrid({
               <span
                 className={cn(
                   'absolute -top-1.5 right-1 rounded-full px-1.5 text-[9.5px] leading-4 font-extrabold tracking-wide uppercase',
-                  active ? 'bg-white text-primary' : 'bg-butter text-butter-ink',
+                  active ? 'bg-primary-ink text-primary' : 'bg-butter text-butter-ink',
                 )}
               >
                 {mark}

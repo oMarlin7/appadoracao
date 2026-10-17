@@ -2,8 +2,13 @@ import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import {
+  AudioLines,
+  Camera,
+  CalendarCheck,
   ChevronRight,
   Copy,
+  ImageOff,
+  Tags,
   Crown,
   Database,
   Download,
@@ -38,6 +43,7 @@ import { EXAMPLE_TAG, buildSeedSongs } from '@/data/songs'
 import { useDocumentTitle, useTeam } from '@/lib/hooks'
 import { getData, useIsAdmin, useMe, useRows, useSettings, type ThemePref } from '@/lib/store'
 import { PASTELS, ROLES, ROLE_BY_ID } from '@/lib/taxonomy'
+import { pickFile, squareImageDataUrl } from '@/lib/images'
 import { cn, copyText, downloadFile, firstName, plural, todayString } from '@/lib/utils'
 
 // ---------------------------------------------------------------------------
@@ -54,6 +60,20 @@ export function ProfilePage() {
   const [bio, setBio] = useState(me.bio)
   const [functions, setFunctions] = useState(me.functions)
   const [color, setColor] = useState(me.color)
+  const [photoBusy, setPhotoBusy] = useState(false)
+  const choosePhoto = async () => {
+    const file = await pickFile('image/*')
+    if (!file) return
+    setPhotoBusy(true)
+    try {
+      const avatarUrl = await squareImageDataUrl(file, 320)
+      if (await updateMyProfile({ avatarUrl })) toast.success('Foto atualizada')
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Não foi possível usar esta foto')
+    } finally {
+      setPhotoBusy(false)
+    }
+  }
   const dirty = name !== me.name || bio !== me.bio || color !== me.color || functions.join() !== me.functions.join()
   const stats = useMemo(
     () => [
@@ -70,15 +90,38 @@ export function ProfilePage() {
       <Card className="overflow-hidden">
         <div className="relative h-24" style={{ background: `linear-gradient(120deg, var(--${color}-solid), var(--${PASTELS[(PASTELS.indexOf(color) + 3) % PASTELS.length]}-solid))` }} />
         <div className="px-5 pb-5">
-          <div className="-mt-10 flex items-end justify-between gap-3">
-            <Avatar profile={{ name, color }} size="xl" ring className="ring-4" />
+          {/* relative + z-10: o avatar fica por cima da faixa colorida (antes ficava escondido atrás dela) */}
+          <div className="relative z-10 -mt-12 flex items-end justify-between gap-3">
+            <div className="relative">
+              <Avatar profile={{ name, color, avatarUrl: me.avatarUrl }} size="2xl" className="shadow-card ring-4 ring-surface" />
+              <button
+                type="button"
+                aria-label={me.avatarUrl ? 'Trocar foto' : 'Colocar foto'}
+                disabled={photoBusy}
+                onClick={() => void choosePhoto()}
+                className="absolute -right-1 -bottom-1 grid size-9 place-items-center rounded-full bg-primary text-primary-ink shadow-float ring-4 ring-surface transition-transform active:scale-95 disabled:opacity-60"
+              >
+                <Camera className="size-[18px]" strokeWidth={2.2} />
+              </button>
+            </div>
             {me.role === 'admin' && (
               <span className="mb-1 flex items-center gap-1 rounded-full bg-butter px-2.5 py-1 text-[12px] font-bold text-butter-ink">
                 <Crown className="size-3.5" /> Líder
               </span>
             )}
           </div>
-          <div className="mt-4 flex flex-wrap gap-2">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 text-[13px] font-bold">
+            <button type="button" onClick={() => void choosePhoto()} disabled={photoBusy} className="text-primary">
+              {me.avatarUrl ? 'Trocar foto' : 'Colocar foto de perfil'}
+            </button>
+            {me.avatarUrl && (
+              <button type="button" onClick={async () => (await updateMyProfile({ avatarUrl: null })) && toast('Foto removida')} className="flex items-center gap-1 text-muted hover:text-ink">
+                <ImageOff className="size-3.5" /> Remover foto
+              </button>
+            )}
+          </div>
+          <div className="mt-4 mb-1 text-[13px] font-semibold text-ink-2">Cor (aparece quando não há foto)</div>
+          <div className="flex flex-wrap gap-2">
             {PASTELS.map((c) => (
               <button
                 key={c}
@@ -140,6 +183,9 @@ export function ProfilePage() {
         {[
           { to: '/ajustes', icon: Settings, label: 'Ajustes do app' },
           { to: '/equipe', icon: Users, label: 'Equipe e convites' },
+          { to: '/presenca', icon: CalendarCheck, label: 'Presença e ausências' },
+          { to: '/ensaios', icon: AudioLines, label: 'Gravações de ensaio' },
+          { to: '/temas', icon: Tags, label: 'Temas do acervo' },
           { to: '/favoritas', icon: Heart, label: 'Minhas favoritas' },
           { to: '/sugestoes', icon: Lightbulb, label: 'Sugestões' },
         ].map((l) => (
@@ -392,8 +438,8 @@ export function TeamPage() {
                 </p>
               </div>
             </div>
-            <div className="flex flex-wrap items-center gap-3 p-5">
-              <div className="min-w-0 flex-1">
+            <div className="grid grid-cols-2 gap-2.5 p-5 sm:flex sm:items-center sm:gap-3">
+              <div className="col-span-2 min-w-0 sm:flex-1">
                 <div className="text-[12px] font-bold tracking-wide text-muted uppercase">Código de convite</div>
                 <div className="mt-0.5 font-mono text-[22px] font-extrabold tracking-wider text-ink">{team?.inviteCode || '—'}</div>
               </div>

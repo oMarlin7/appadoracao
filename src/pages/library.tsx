@@ -8,11 +8,11 @@ import { Menu } from '@/components/ui/menu'
 import { Chip, EmptyState, SearchInput, SectionTitle } from '@/components/ui/primitives'
 import { Sheet } from '@/components/ui/sheet'
 import { toggleFavorite } from '@/lib/actions'
-import { useDocumentTitle, useFavoriteCounts, useFavoriteIds, usePlayCounts, useSongs } from '@/lib/hooks'
+import { useDocumentTitle, useFavoriteCounts, useFavoriteIds, usePlayCounts, useSongs, useThemes } from '@/lib/hooks'
 import { allKeys, prettyAccidentals, sameKey } from '@/lib/music/theory'
 import { lyricSnippet, searchSongs } from '@/lib/search'
 import { useSettings } from '@/lib/store'
-import { MOMENTS, MOMENT_BY_ID, TEMPOS, THEMES, THEME_BY_ID, ink, soft, solid, type Tempo } from '@/lib/taxonomy'
+import { MOMENTS, MOMENT_BY_ID, TEMPOS, THEME_BY_ID, ink, soft, solid, type Tempo } from '@/lib/taxonomy'
 import { plural } from '@/lib/utils'
 import type { Song } from '@/types'
 
@@ -71,6 +71,7 @@ export function applyFilters(
 }
 
 function FilterSheet({ open, onClose, filters, update, count }: { open: boolean; onClose: () => void; filters: Filters; update: (p: Partial<Filters>) => void; count: number }) {
+  const themes = useThemes()
   const toggle = (list: string[], id: string) => (list.includes(id) ? list.filter((x) => x !== id) : [...list, id])
   const [minorKeys, setMinorKeys] = useState(false)
   return (
@@ -98,7 +99,7 @@ function FilterSheet({ open, onClose, filters, update, count }: { open: boolean;
         ))}
       </FilterGroup>
       <FilterGroup title="Tema">
-        {THEMES.map((t) => (
+        {themes.map((t) => (
           <Chip key={t.id} icon={t.icon} color={t.color} selected={filters.themes.includes(t.id)} onClick={() => update({ themes: toggle(filters.themes, t.id) })}>
             {t.short ?? t.name}
           </Chip>
@@ -176,6 +177,7 @@ function SongList({ songs, query, grid, groupByLetter }: { songs: Song[]; query?
 }
 
 export function LibraryPage() {
+  const themes = useThemes()
   useDocumentTitle('Acervo')
   const songs = useSongs()
   const favIds = useFavoriteIds()
@@ -220,7 +222,7 @@ export function LibraryPage() {
         }
       />
 
-      <div className="glass sticky top-0 z-20 -mx-4 border-b border-transparent px-4 pt-[max(8px,env(safe-area-inset-top))] pb-3 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
+      <div className="glass-page sticky top-0 z-20 -mx-4 border-b border-transparent px-4 pt-[max(8px,env(safe-area-inset-top))] pb-3 sm:-mx-6 sm:px-6 lg:-mx-10 lg:px-10">
         <SearchInput value={filters.q} onChange={(q) => update({ q })} placeholder="Buscar música, artista ou trecho" />
         <div className="no-scrollbar -mx-4 mt-3 flex gap-2 overflow-x-auto px-4 sm:-mx-6 sm:px-6 lg:mx-0 lg:px-0">
           <Chip icon={SlidersHorizontal} selected={activeCount > 0} count={activeCount || undefined} onClick={() => setSheet(true)}>
@@ -271,9 +273,17 @@ export function LibraryPage() {
 
       {browsing && (
         <section className="mt-6">
-          <SectionTitle title="Navegar por tema" subtitle="Encontre pelo assunto da mensagem" />
+          <SectionTitle
+            title="Navegar por tema"
+            subtitle="Encontre pelo assunto da mensagem"
+            action={
+              <Link to="/temas" className="shrink-0 text-[13px] font-bold text-primary">
+                Todos os temas
+              </Link>
+            }
+          />
           <div className="no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-5 lg:px-0">
-            {THEMES.filter((t) => themeCounts.get(t.id)).map((t) => (
+            {themes.filter((t) => themeCounts.get(t.id)).map((t) => (
               <ThemeTile key={t.id} theme={t} count={themeCounts.get(t.id) ?? 0} to={`/acervo/tema/${t.id}`} className="w-[150px] shrink-0 lg:w-auto" />
             ))}
           </div>
@@ -388,6 +398,7 @@ function CollectionHero({ title, description, color, icon: Icon, verse, count, a
 
 export function ThemePage() {
   const { themeId = '' } = useParams()
+  useThemes()
   const theme = THEME_BY_ID[themeId]
   useDocumentTitle(theme?.name)
   const songs = useSongs()

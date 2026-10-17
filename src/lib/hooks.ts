@@ -1,7 +1,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRows, useSession, useSettings, useTable } from './store'
+import { THEMES, type Theme } from './taxonomy'
 import { todayString } from './utils'
 import type { Id, Service, Song } from '@/types'
+
+/** Temas do app + os criados pela equipe (redesenha quando a equipe cria/edita um tema). */
+export function useThemes(): Theme[] {
+  const custom = useTable('custom_themes')
+  // `custom` só serve para recalcular: o registro THEMES já foi atualizado pela store.
+  return useMemo(() => [...THEMES], [custom])
+}
 
 export function useSongs(): Song[] {
   const rows = useRows('songs')

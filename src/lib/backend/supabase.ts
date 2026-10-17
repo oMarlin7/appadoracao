@@ -20,6 +20,16 @@ function fromDb<T>(row: Record<string, unknown>): T {
 
 const MESSAGE_HISTORY = 500
 const PAGE = 1000
+const BUCKET = 'ensaios'
+
+/** Tabela ou coluna que ainda não existe no banco (migração nova não aplicada). */
+const missingTable = (e: { code?: string; message?: string }) =>
+  e.code === '42P01' || e.code === 'PGRST205' || /does not exist|could not find the table/i.test(e.message ?? '')
+const missingColumn = (e: { code?: string; message?: string }) => {
+  if (e.code !== 'PGRST204' && !/column .* does not exist|could not find the '.*' column/i.test(e.message ?? '')) return null
+  return /'([a-z_]+)' column|column "?([a-z_]+)"? /i.exec(e.message ?? '')?.slice(1).find(Boolean) ?? null
+}
+const UPGRADE_HINT = 'O banco precisa da atualização v2: rode o arquivo supabase/migrations/…_v2_midia_presenca.sql no SQL Editor (veja o README).'
 
 function translateError(e: unknown): Error {
   if (isNetworkError(e)) return new AppError('Sem conexão com a internet.', 'network')
@@ -60,6 +70,8 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
       if (error) throw error
       return data ?? []
     }
+    // Banco ainda sem a migração v2: o app segue funcionando sem as funções novas.
+    const optional = table === 'attendance' || table === 'recordings' || table === 'custom_themes'
     const all: Record<string, unknown>[] = []
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await sb
@@ -67,7 +79,13 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
         .select('*')
         .order('id')
         .range(from, from + PAGE - 1)
-      if (error) throw error
+      if (error) {
+        if (optional && missingTable(error)) {
+          console.warn(UPGRADE_HINT)
+          return []
+        }
+        throw error
+      }
       all.push(...(data ?? []))
       if (!data || data.length < PAGE) break
     }
@@ -197,14 +215,58 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
 
     async upsert(table, row) {
       const sb = await clientP
-      const { error } = await sb.from(table).upsert(toDb(row))
-      if (error) throw isNetworkError(error) ? error : translateError(error)
+      const payload = toDb(row)
+      // Colunas novas que o banco ainda não conhece (sem a migração v2) são deixadas de fora,
+      // para o resto da alteração não se perder.
+      for (let attempt = 0; attempt < 4; attempt++) {
+        const { error } = await sb.from(table).upsert(payload)
+        if (!error) return
+        if (isNetworkError(error)) throw error
+        if (missingTable(error)) throw new AppError(UPGRADE_HINT)
+        const col = missingColumn(error)
+        if (!col || !(col in payload)) throw translateError(error)
+        console.warn(`Coluna ${table}.${col} não existe no banco. ${UPGRADE_HINT}`)
+        delete payload[col]
+      }
     },
 
     async remove(table, id) {
       const sb = await clientP
       const { error } = await sb.from(table).delete().eq('id', id)
       if (error) throw isNetworkError(error) ? error : translateError(error)
+    },
+
+    async uploadFile(path, file, contentType) {
+      const sb = await clientP
+      const { error } = await sb.storage.from(BUCKET).upload(path, file, { contentType, upsert: false, cacheControl: '31536000' })
+      if (error) {
+        if (/bucket not found/i.test(error.message)) throw new AppError(UPGRADE_HINT)
+        throw isNetworkError(error) ? error : translateError(error)
+      }
+    },
+
+    async fileUrl(path) {
+      const sb = await clientP
+      const { data, error } = await sb.storage.from(BUCKET).createSignedUrl(path, 60 * 60 * 6)
+      if (error || !data) throw translateError(error ?? new Error('Arquivo não encontrado.'))
+      return data.signedUrl
+    },
+
+    async removeFile(path) {
+      const sb = await clientP
+      const { error } = await sb.storage.from(BUCKET).remove([path])
+      if (error && !isNetworkError(error)) console.warn('Arquivo não removido do Storage', path, error)
+    },
+
+    async invoke<T>(fn: string, body: Record<string, unknown>): Promise<T> {
+      const sb = await clientP
+      const { data, error } = await sb.functions.invoke(fn, { body })
+      if (error) {
+        const status = (error as { context?: { status?: number } }).context?.status
+        if (status === 404) throw new AppError('A função do servidor ainda não foi publicada (veja o README).', 'no-server')
+        throw translateError(error)
+      }
+      return data as T
     },
   }
 }

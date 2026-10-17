@@ -2,6 +2,8 @@ import { type ReactNode } from 'react'
 import { Link, NavLink, Outlet, ScrollRestoration, useMatches, useNavigate } from 'react-router'
 import {
   ArrowLeft,
+  AudioLines,
+  CalendarCheck,
   CalendarDays,
   CloudOff,
   Heart,
@@ -21,8 +23,10 @@ import { ROLE_BY_ID } from '@/lib/taxonomy'
 import { useMe, useRows, useSession } from '@/lib/store'
 import { useOnline, usePendingCount } from '@/lib/sync'
 import { cn } from '@/lib/utils'
+import { usePlayer } from '@/lib/player'
 import { Avatar } from './avatar'
 import { Logo } from './logo'
+import { AudioDock } from './media'
 
 interface NavItem {
   to: string
@@ -97,6 +101,14 @@ function Sidebar() {
         <NavLink to="/sugestoes" className={linkCls}>
           <Lightbulb className="size-5" strokeWidth={2.1} />
           <span className="flex-1">Sugestões</span>
+        </NavLink>
+        <NavLink to="/ensaios" className={linkCls}>
+          <AudioLines className="size-5" strokeWidth={2.1} />
+          <span className="flex-1">Ensaios</span>
+        </NavLink>
+        <NavLink to="/presenca" className={linkCls}>
+          <CalendarCheck className="size-5" strokeWidth={2.1} />
+          <span className="flex-1">Presença</span>
         </NavLink>
       </nav>
 
@@ -199,15 +211,24 @@ function OfflinePill() {
 export function AppLayout() {
   const matches = useMatches()
   const hideNav = matches.some((m) => (m.handle as { hideNav?: boolean } | undefined)?.hideNav)
+  const hasDock = usePlayer((s) => !!s.track)
   return (
     <div className="min-h-dvh">
       <ScrollRestoration />
       <Sidebar />
       <OfflinePill />
-      <main className={cn('lg:pl-[264px]', hideNav ? 'pb-6' : 'pb-[calc(96px+env(safe-area-inset-bottom))] lg:pb-10')}>
+      <main
+        className={cn(
+          'lg:pl-[264px]',
+          hideNav ? 'pb-6' : 'pb-[calc(96px+env(safe-area-inset-bottom))] lg:pb-10',
+          hasDock && (hideNav ? 'pb-[calc(110px+env(safe-area-inset-bottom))]' : 'pb-[calc(200px+env(safe-area-inset-bottom))] lg:pb-36'),
+        )}
+      >
         <Outlet />
       </main>
       {!hideNav && <BottomNav />}
+      {/* Telas sem a navegação têm a própria barra no rodapé (cifra, editor, chat): o player sobe. */}
+      <AudioDock aboveToolbar={hideNav} />
     </div>
   )
 }

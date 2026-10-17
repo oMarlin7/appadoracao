@@ -1,5 +1,6 @@
 import { del, get, set } from 'idb-keyval'
 import { buildDemoSeed } from '@/data/seed'
+import { synthRehearsal } from '@/lib/demo-audio'
 import { readJson, readStorage, removeStorage, writeStorage } from '@/lib/storage'
 import { nowIso, uid } from '@/lib/utils'
 import { TABLES, type AuthUser, type DataSnapshot, type Profile, type Row, type TableName } from '@/types'
@@ -14,6 +15,9 @@ import { AppError, type Backend, type ChangeEvent, type InviteCheck, type SignUp
 const DB_KEY = 'adoracao:demo:db:v1'
 const SESSION_KEY = 'adoracao:demo:user'
 const ACCOUNTS_KEY = 'adoracao:demo:accounts'
+const FILE_PREFIX = 'adoracao:demo:file:'
+/** Tabelas que chegaram depois da primeira versão: quem já usava o demo recebe os exemplos delas. */
+const ADDED_LATER: TableName[] = ['attendance', 'recordings', 'custom_themes']
 
 type Accounts = Record<string, { password: string; profileId: string }>
 
@@ -47,10 +51,13 @@ export function createDemoBackend(): DemoBackend {
         stored = undefined
       }
       const snapshot = emptySnapshot()
-      const source = stored ?? buildDemoSeed()
+      const seed = buildDemoSeed()
+      const source = stored ?? seed
       for (const t of TABLES) Object.assign(snapshot[t], source[t] ?? {})
+      const upgraded = !!stored && ADDED_LATER.some((t) => !stored[t])
+      if (upgraded) for (const t of ADDED_LATER) if (!stored![t]) Object.assign(snapshot[t], seed[t])
       db = snapshot
-      if (!stored) persist()
+      if (!stored || upgraded) persist()
       return snapshot
     })()
     return loading
@@ -78,6 +85,8 @@ export function createDemoBackend(): DemoBackend {
     apply(e)
     changeListeners.forEach((l) => l(e))
   })
+
+  const fileUrls = new Map<string, string>()
 
   // Sem armazenamento disponível, a sessão vive só enquanto a página estiver aberta.
   let memorySession: string | null = null
@@ -192,6 +201,36 @@ export function createDemoBackend(): DemoBackend {
       apply(e)
       persist()
       channel?.postMessage(e)
+    },
+
+    async uploadFile(path, file) {
+      await set(FILE_PREFIX + path, file)
+    },
+
+    async fileUrl(path) {
+      const cached = fileUrls.get(path)
+      if (cached) return cached
+      let blob = await get<Blob>(FILE_PREFIX + path).catch(() => undefined)
+      // Gravações de exemplo: o áudio é sintetizado na primeira vez que alguém dá play.
+      if (!blob && path.startsWith('exemplo/')) {
+        const [chords, bpm] = path.replace('exemplo/', '').replace(/\.wav$/, '').split('@')
+        blob = synthRehearsal(chords.split('-'), Number(bpm) || 76)
+      }
+      if (!blob) throw new AppError('Arquivo não encontrado neste aparelho.')
+      const url = URL.createObjectURL(blob)
+      fileUrls.set(path, url)
+      return url
+    },
+
+    async removeFile(path) {
+      await del(FILE_PREFIX + path).catch(() => {})
+      const url = fileUrls.get(path)
+      if (url) URL.revokeObjectURL(url)
+      fileUrls.delete(path)
+    },
+
+    async invoke() {
+      throw new AppError('Disponível com o Supabase configurado.', 'no-server')
     },
 
     async resetDemo() {

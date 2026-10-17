@@ -221,7 +221,7 @@ export function Segmented<T extends string>({
   size?: 'sm' | 'md'
 }) {
   return (
-    <div role="tablist" className={cn('inline-flex rounded-full bg-surface-2 p-1', className)}>
+    <div role="tablist" className={cn('no-scrollbar inline-flex max-w-full overflow-x-auto rounded-full bg-surface-2 p-1 dark:bg-black/25 dark:ring-1 dark:ring-white/5', className)}>
       {options.map((o) => {
         const active = o.value === value
         const Icon = o.icon
@@ -233,9 +233,11 @@ export function Segmented<T extends string>({
             aria-selected={active}
             onClick={() => onChange(o.value)}
             className={cn(
-              'inline-flex flex-1 items-center justify-center gap-1.5 rounded-full font-semibold transition-all duration-200',
-              size === 'sm' ? 'h-8 px-3 text-[12.5px]' : 'h-9.5 px-4 text-[13.5px]',
-              active ? 'bg-surface text-ink shadow-card' : 'text-muted hover:text-ink',
+              'inline-flex flex-1 shrink-0 items-center justify-center gap-1.5 rounded-full font-semibold whitespace-nowrap transition-all duration-200',
+              size === 'sm' ? 'h-8 px-3 text-[12.5px]' : 'h-9.5 px-3.5 text-[13.5px]',
+              active
+                ? 'bg-surface text-ink shadow-card dark:bg-primary-soft dark:text-primary-strong dark:shadow-none dark:ring-1 dark:ring-primary/35'
+                : 'text-muted hover:text-ink',
             )}
           >
             {Icon && <Icon className="size-4" strokeWidth={2.2} />}
@@ -261,7 +263,7 @@ export function Switch({ checked, onChange, label, description }: { checked: boo
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className={cn('relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200', checked ? 'bg-primary' : 'bg-surface-3')}
+        className={cn('relative h-7 w-12 shrink-0 rounded-full transition-colors duration-200', checked ? 'bg-primary' : 'bg-surface-3 dark:bg-white/15')}
       >
         <span
           className={cn(

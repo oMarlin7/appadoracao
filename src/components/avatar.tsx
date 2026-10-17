@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { cn, initials } from '@/lib/utils'
 import { solid, ink, type Pastel } from '@/lib/taxonomy'
 import type { Profile } from '@/types'
@@ -8,6 +9,7 @@ const SIZES = {
   md: 'size-10 text-[13px]',
   lg: 'size-14 text-[17px]',
   xl: 'size-20 text-2xl',
+  '2xl': 'size-24 text-3xl',
 }
 
 export function Avatar({
@@ -18,7 +20,7 @@ export function Avatar({
   className,
   ring,
 }: {
-  profile?: Pick<Profile, 'name' | 'color'> | null
+  profile?: Pick<Profile, 'name' | 'color' | 'avatarUrl'> | null
   name?: string
   color?: Pastel
   size?: keyof typeof SIZES
@@ -27,18 +29,25 @@ export function Avatar({
 }) {
   const n = profile?.name ?? name ?? '?'
   const c = profile?.color ?? color ?? 'lavender'
+  const photo = profile?.avatarUrl || null
+  const [failed, setFailed] = useState<string | null>(null)
+  const showPhoto = photo && failed !== photo
   return (
     <span
       title={n}
       className={cn(
-        'inline-grid shrink-0 place-items-center rounded-full font-bold tracking-tight select-none',
+        'relative inline-grid shrink-0 place-items-center overflow-hidden rounded-full font-bold tracking-tight select-none',
         SIZES[size],
         ring && 'ring-2 ring-surface',
         className,
       )}
       style={{ background: solid(c), color: ink(c) }}
     >
-      {initials(n)}
+      {showPhoto ? (
+        <img src={photo} alt="" draggable={false} onError={() => setFailed(photo)} className="absolute inset-0 size-full object-cover" />
+      ) : (
+        initials(n)
+      )}
     </span>
   )
 }
@@ -49,7 +58,7 @@ export function AvatarStack({
   size = 'sm',
   className,
 }: {
-  profiles: Array<Pick<Profile, 'id' | 'name' | 'color'>>
+  profiles: Array<Pick<Profile, 'id' | 'name' | 'color' | 'avatarUrl'>>
   max?: number
   size?: 'xs' | 'sm' | 'md'
   className?: string

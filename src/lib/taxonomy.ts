@@ -1,7 +1,29 @@
 import {
   Anchor,
   AudioLines,
+  BookOpen,
   Bird,
+  Briefcase,
+  Church,
+  Compass,
+  Feather,
+  Gem,
+  GraduationCap,
+  HeartHandshake,
+  HeartPulse,
+  Hourglass,
+  House,
+  Leaf,
+  Lightbulb,
+  MessageCircle,
+  Mountain,
+  Plane,
+  Sparkle,
+  Swords,
+  Tent,
+  Trees,
+  Umbrella,
+  Wheat,
   CalendarHeart,
   CloudSun,
   Coins,
@@ -42,6 +64,7 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 import type { CSSProperties } from 'react'
+import type { CustomTheme } from '@/types'
 import { stripAccents } from './music/sheet'
 
 export type Pastel =
@@ -76,15 +99,31 @@ interface TaxonomyItem {
   icon: LucideIcon
 }
 
+export type ThemeGroup = 'deus' | 'cristo' | 'resposta' | 'vida' | 'igreja' | 'datas' | 'equipe'
+
+export const THEME_GROUPS: Array<{ id: ThemeGroup; name: string }> = [
+  { id: 'deus', name: 'Quem Deus é' },
+  { id: 'cristo', name: 'Obra de Cristo' },
+  { id: 'resposta', name: 'Nossa resposta' },
+  { id: 'vida', name: 'Vida com Deus' },
+  { id: 'igreja', name: 'Espírito & Igreja' },
+  { id: 'datas', name: 'Datas especiais' },
+  { id: 'equipe', name: 'Criados pela equipe' },
+]
+
 export interface Theme extends TaxonomyItem {
+  group: ThemeGroup
+  /** Criado pela equipe (pode ser editado/excluído). */
+  custom?: boolean
   verse?: { text: string; ref: string }
   /** Palavras/expressões (sem acento, minúsculas) que indicam o tema numa letra. */
   keywords: string[]
 }
 
-export const THEMES: Theme[] = [
+const BUILTIN_THEMES: Theme[] = [
   {
     id: 'adoracao',
+    group: 'resposta',
     name: 'Adoração & Intimidade',
     short: 'Adoração',
     description: 'Reverência, contemplação e intimidade diante de Deus.',
@@ -95,6 +134,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'celebracao',
+    group: 'resposta',
     name: 'Louvor & Celebração',
     short: 'Celebração',
     description: 'Alegria, festa e exaltação pelo que Deus é e faz.',
@@ -105,6 +145,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'gratidao',
+    group: 'resposta',
     name: 'Gratidão',
     description: 'Reconhecer a bondade de Deus e tudo o que Ele já fez.',
     color: 'peach',
@@ -114,6 +155,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'entrega',
+    group: 'resposta',
     name: 'Entrega & Rendição',
     short: 'Entrega',
     description: 'A vida no altar: rendição, consagração e obediência.',
@@ -124,6 +166,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'espirito',
+    group: 'igreja',
     name: 'Espírito Santo',
     description: 'Presença, poder e o mover do Espírito.',
     color: 'aqua',
@@ -133,6 +176,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'avivamento',
+    group: 'igreja',
     name: 'Avivamento & Fogo',
     short: 'Avivamento',
     description: 'Clamor por renovo, fogo no altar e paixão por Deus.',
@@ -143,6 +187,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'cruz',
+    group: 'cristo',
     name: 'Cruz & Sangue',
     description: 'O sacrifício de Cristo e o poder do seu sangue.',
     color: 'rose',
@@ -152,6 +197,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'graca',
+    group: 'cristo',
     name: 'Graça & Perdão',
     description: 'Amor imerecido que perdoa, aceita e transforma.',
     color: 'orchid',
@@ -161,6 +207,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'fe',
+    group: 'vida',
     name: 'Fé & Confiança',
     description: 'Confiança firme nas promessas e na fidelidade de Deus.',
     color: 'sage',
@@ -170,6 +217,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'esperanca',
+    group: 'vida',
     name: 'Esperança & Consolo',
     short: 'Esperança',
     description: 'Consolo na dor e esperança que não decepciona.',
@@ -180,6 +228,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'cura',
+    group: 'vida',
     name: 'Cura & Restauração',
     short: 'Cura',
     description: 'Deus que cura, liberta e faz novas todas as coisas.',
@@ -190,6 +239,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'vitoria',
+    group: 'vida',
     name: 'Vitória & Batalha',
     short: 'Vitória',
     description: 'Guerra espiritual e a vitória que vem do Senhor.',
@@ -200,6 +250,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'majestade',
+    group: 'deus',
     name: 'Majestade & Santidade',
     short: 'Majestade',
     description: 'A grandeza, a soberania e a santidade de Deus.',
@@ -210,6 +261,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'amor',
+    group: 'deus',
     name: 'Amor de Deus',
     description: 'O amor do Pai que nos alcança e nos chama de filhos.',
     color: 'rose',
@@ -219,6 +271,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'oracao',
+    group: 'resposta',
     name: 'Oração & Clamor',
     short: 'Clamor',
     description: 'Buscar a face de Deus, interceder e depender dEle.',
@@ -229,6 +282,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'missoes',
+    group: 'igreja',
     name: 'Missões & Envio',
     short: 'Missões',
     description: 'Ide e fazei discípulos: o chamado para as nações.',
@@ -239,6 +293,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'eternidade',
+    group: 'cristo',
     name: 'Volta de Jesus & Eternidade',
     short: 'Eternidade',
     description: 'O céu, a eternidade e a esperança da volta de Cristo.',
@@ -249,6 +304,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'natal',
+    group: 'datas',
     name: 'Natal',
     description: 'O nascimento de Jesus: Deus conosco.',
     color: 'butter',
@@ -258,6 +314,7 @@ export const THEMES: Theme[] = [
   },
   {
     id: 'pascoa',
+    group: 'cristo',
     name: 'Páscoa & Ressurreição',
     short: 'Ressurreição',
     description: 'O túmulo vazio: Cristo vive e reina.',
@@ -266,7 +323,214 @@ export const THEMES: Theme[] = [
     verse: { text: 'Ele não está aqui, porque já ressuscitou.', ref: 'Mateus 28:6' },
     keywords: ['ressuscitou', 'ressurreicao', 'vive', 'tumulo', 'sepulcro', 'pascoa', 'venceu a morte', 'ressurreto', 'levantou'],
   },
+  {
+    id: 'fidelidade',
+    group: 'deus',
+    name: 'Fidelidade de Deus',
+    short: 'Fidelidade',
+    description: 'Deus cumpre o que promete, em todas as estações.',
+    color: 'sage',
+    icon: Mountain,
+    verse: { text: 'As suas misericórdias não têm fim; renovam-se cada manhã. Grande é a tua fidelidade.', ref: 'Lamentações 3:22-23' },
+    keywords: ['fidelidade', 'fiel', 'tua fidelidade', 'grande e a tua fidelidade', 'nunca falhou', 'nunca falha', 'cumpre', 'cumpriu', 'promessa', 'promessas', 'alianca', 'estacoes', 'todas as estacoes'],
+  },
+  {
+    id: 'nome-jesus',
+    group: 'deus',
+    name: 'Nome de Jesus',
+    description: 'O nome que está acima de todo nome.',
+    color: 'orchid',
+    icon: Sparkle,
+    verse: { text: 'Deus o exaltou soberanamente e lhe deu o nome que está acima de todo nome.', ref: 'Filipenses 2:9' },
+    keywords: ['nome de jesus', 'teu nome', 'seu nome', 'acima de todo nome', 'poderoso nome', 'santo nome', 'nome de cristo', 'ao nome', 'teu nome e', 'o nome'],
+  },
+  {
+    id: 'criacao',
+    group: 'deus',
+    name: 'Criação & Grandeza',
+    short: 'Criação',
+    description: 'A glória de Deus vista em tudo o que Ele criou.',
+    color: 'aqua',
+    icon: Trees,
+    verse: { text: 'Os céus proclamam a glória de Deus, e o firmamento anuncia as obras das suas mãos.', ref: 'Salmos 19:1' },
+    keywords: ['criacao', 'criou', 'criador', 'firmamento', 'estrelas', 'mar', 'mares', 'montes', 'montanhas', 'natureza', 'universo', 'obra das tuas maos', 'ceus proclamam', 'sol', 'lua'],
+  },
+  {
+    id: 'presenca',
+    group: 'deus',
+    name: 'Presença de Deus',
+    short: 'Presença',
+    description: 'Desejo de estar com Deus e ser cheio da Sua presença.',
+    color: 'lavender',
+    icon: Tent,
+    verse: { text: 'Na tua presença há plenitude de alegria.', ref: 'Salmos 16:11' },
+    keywords: ['tua presenca', 'sua presenca', 'presenca', 'habitar', 'habita', 'morada', 'tabernaculo', 'santo dos santos', 'estar contigo', 'perto de ti', 'mais de ti', 'enche este lugar', 'nuvem'],
+  },
+  {
+    id: 'volta',
+    group: 'cristo',
+    name: 'Volta de Jesus',
+    description: 'Esperança na volta de Cristo e no Reino que vem.',
+    color: 'butter',
+    icon: Hourglass,
+    verse: { text: 'Certamente cedo venho. Amém. Ora, vem, Senhor Jesus.', ref: 'Apocalipse 22:20' },
+    keywords: ['maranata', 'vem senhor', 'ora vem', 'ele voltara', 'voltara', 'sua volta', 'tua volta', 'vinda', 'trombeta', 'arrebatamento', 'cedo venho', 'noiva', 'nos ares'],
+  },
+  {
+    id: 'arrependimento',
+    group: 'resposta',
+    name: 'Arrependimento & Quebrantamento',
+    short: 'Arrependimento',
+    description: 'Coração quebrantado, confissão e volta para Deus.',
+    color: 'sky',
+    icon: Feather,
+    verse: { text: 'Cria em mim, ó Deus, um coração puro e renova em mim um espírito inabalável.', ref: 'Salmos 51:10' },
+    keywords: ['arrependimento', 'arrependido', 'quebrantado', 'quebranta', 'quebrantamento', 'confesso', 'perdoa-me', 'perdoa me', 'pequei', 'volto', 'filho prodigo', 'coracao puro', 'cria em mim', 'contrito', 'humilha'],
+  },
+  {
+    id: 'santidade',
+    group: 'resposta',
+    name: 'Santidade & Consagração',
+    short: 'Santidade',
+    description: 'Vida separada para Deus, pureza e obediência.',
+    color: 'lavender',
+    icon: Gem,
+    verse: { text: 'Sede santos, porque eu sou santo.', ref: '1 Pedro 1:16' },
+    keywords: ['santidade', 'santificado', 'santifica', 'santifica-me', 'pureza', 'puro', 'limpo', 'separado', 'consagrado', 'consagrar', 'obediencia', 'obedecer', 'vida santa', 'sem mancha'],
+  },
+  {
+    id: 'paz',
+    group: 'vida',
+    name: 'Paz',
+    description: 'A paz de Deus que guarda o coração.',
+    color: 'mint',
+    icon: Waves,
+    verse: { text: 'E a paz de Deus, que excede todo o entendimento, guardará os vossos corações.', ref: 'Filipenses 4:7' },
+    keywords: ['paz', 'tua paz', 'sossego', 'descanso', 'descansar', 'calma', 'acalma', 'aquieta', 'aquietai', 'quietude', 'sereno', 'bonanca', 'tranquilo', 'nao temas'],
+  },
+  {
+    id: 'provisao',
+    group: 'vida',
+    name: 'Provisão & Cuidado',
+    short: 'Provisão',
+    description: 'Deus supre, cuida e sustenta em todas as necessidades.',
+    color: 'butter',
+    icon: Wheat,
+    verse: { text: 'O meu Deus suprirá todas as vossas necessidades.', ref: 'Filipenses 4:19' },
+    keywords: ['provisao', 'provedor', 'supre', 'suprira', 'sustento', 'pao', 'mana', 'jeova jire', 'cuida de mim', 'nada me faltara', 'pastor', 'abundancia', 'deserto'],
+  },
+  {
+    id: 'protecao',
+    group: 'vida',
+    name: 'Refúgio & Proteção',
+    short: 'Refúgio',
+    description: 'Deus é abrigo, escudo e fortaleza.',
+    color: 'sky',
+    icon: Umbrella,
+    verse: { text: 'Aquele que habita no esconderijo do Altíssimo, à sombra do Onipotente descansará.', ref: 'Salmos 91:1' },
+    keywords: ['refugio', 'abrigo', 'esconderijo', 'fortaleza', 'escudo', 'protecao', 'protege', 'guardara', 'sombra', 'asas', 'debaixo das tuas asas', 'torre forte', 'livramento', 'livra'],
+  },
+  {
+    id: 'direcao',
+    group: 'vida',
+    name: 'Direção & Sabedoria',
+    short: 'Direção',
+    description: 'Buscar a vontade de Deus e ser guiado por Ele.',
+    color: 'orchid',
+    icon: Compass,
+    verse: { text: 'Lâmpada para os meus pés é a tua palavra e luz para o meu caminho.', ref: 'Salmos 119:105' },
+    keywords: ['direcao', 'guia', 'guia-me', 'guia me', 'conduz', 'conduza', 'caminho', 'caminhos', 'tua vontade', 'sabedoria', 'ensina-me', 'ensina me', 'passos', 'luz para o meu caminho'],
+  },
+  {
+    id: 'familia',
+    group: 'vida',
+    name: 'Família',
+    description: 'Lar, casamento, pais e filhos debaixo da bênção de Deus.',
+    color: 'rose',
+    icon: House,
+    verse: { text: 'Eu e a minha casa serviremos ao Senhor.', ref: 'Josué 24:15' },
+    keywords: ['familia', 'familias', 'minha casa', 'meu lar', 'lar', 'casamento', 'esposa', 'marido', 'maes', 'geracoes', 'geracao', 'heranca', 'eu e a minha casa'],
+  },
+  {
+    id: 'palavra',
+    group: 'vida',
+    name: 'Palavra de Deus',
+    short: 'Palavra',
+    description: 'A Bíblia como luz, alimento e verdade.',
+    color: 'sage',
+    icon: BookOpen,
+    verse: { text: 'Porque a palavra de Deus é viva e eficaz.', ref: 'Hebreus 4:12' },
+    keywords: ['tua palavra', 'palavra', 'escrituras', 'biblia', 'verdade', 'lei do senhor', 'mandamentos', 'lampada', 'meditar', 'medito', 'alimento'],
+  },
+  {
+    id: 'recomeco',
+    group: 'vida',
+    name: 'Recomeço & Novo Tempo',
+    short: 'Recomeço',
+    description: 'Novas misericórdias, nova estação, coisa nova.',
+    color: 'mint',
+    icon: Leaf,
+    verse: { text: 'Eis que faço uma coisa nova.', ref: 'Isaías 43:19' },
+    keywords: ['recomeco', 'recomecar', 'novo tempo', 'nova estacao', 'coisa nova', 'novo dia', 'amanhecer', 'nova vida', 'nascer de novo', 'ano novo', 'renascer', 'todas as coisas novas'],
+  },
+  {
+    id: 'unidade',
+    group: 'igreja',
+    name: 'Unidade & Comunhão',
+    short: 'Comunhão',
+    description: 'Igreja unida como corpo, irmãos em amor.',
+    color: 'peach',
+    icon: HeartHandshake,
+    verse: { text: 'Oh! Quão bom e quão suave é que os irmãos vivam em união!', ref: 'Salmos 133:1' },
+    keywords: ['unidade', 'unidos', 'uniao', 'um so corpo', 'corpo de cristo', 'comunhao', 'irmaos', 'igreja', 'juntos', 'familia de deus', 'um so coracao', 'povo de deus'],
+  },
+  {
+    id: 'batalha',
+    group: 'igreja',
+    name: 'Batalha Espiritual',
+    short: 'Batalha',
+    description: 'Autoridade em Cristo, guerra espiritual e intercessão.',
+    color: 'coral',
+    icon: Swords,
+    verse: { text: 'Revesti-vos de toda a armadura de Deus.', ref: 'Efésios 6:11' },
+    keywords: ['batalha', 'guerra', 'armadura', 'autoridade', 'declaro', 'cadeias', 'correntes', 'fortalezas', 'trevas', 'inimigo', 'muralhas', 'sangue de jesus tem poder'],
+  },
 ]
+
+/** Ícones que a equipe pode escolher ao criar um tema. */
+export const THEME_ICONS: Record<string, LucideIcon> = {
+  sparkles: Sparkles,
+  heart: Heart,
+  flame: Flame,
+  crown: Crown,
+  cross: Cross,
+  star: Star,
+  sun: Sun,
+  sunrise: Sunrise,
+  leaf: Leaf,
+  sprout: Sprout,
+  mountain: Mountain,
+  waves: Waves,
+  wind: Wind,
+  bird: Bird,
+  shield: Shield,
+  anchor: Anchor,
+  book: BookOpen,
+  house: House,
+  church: Church,
+  globe: Globe,
+  gift: Gift,
+  hand: HandHeart,
+  handshake: HeartHandshake,
+  compass: Compass,
+  lightbulb: Lightbulb,
+  music: Music,
+  gem: Gem,
+  tent: Tent,
+}
+
+/** Temas do app + temas criados pela equipe (atualizado quando a tabela muda). */
+export const THEMES: Theme[] = [...BUILTIN_THEMES]
 
 export interface Moment extends TaxonomyItem {
   /** Temas que costumam funcionar nesse momento. */
@@ -283,7 +547,7 @@ export const MOMENTS: Moment[] = [
     description: 'Chamada à adoração: une a igreja e abre o culto.',
     color: 'butter',
     icon: DoorOpen,
-    themes: ['celebracao', 'majestade', 'gratidao', 'vitoria'],
+    themes: ['celebracao', 'majestade', 'gratidao', 'vitoria', 'unidade'],
     tempos: ['rapida', 'moderada'],
   },
   {
@@ -292,7 +556,7 @@ export const MOMENTS: Moment[] = [
     description: 'Celebração, alegria e exaltação.',
     color: 'peach',
     icon: Music,
-    themes: ['celebracao', 'vitoria', 'gratidao', 'majestade', 'pascoa'],
+    themes: ['celebracao', 'vitoria', 'gratidao', 'majestade', 'pascoa', 'criacao', 'nome-jesus'],
     tempos: ['rapida', 'moderada'],
   },
   {
@@ -301,7 +565,7 @@ export const MOMENTS: Moment[] = [
     description: 'Contemplação e intimidade — o coração se derrama.',
     color: 'lavender',
     icon: Sparkles,
-    themes: ['adoracao', 'majestade', 'amor', 'espirito'],
+    themes: ['adoracao', 'majestade', 'amor', 'espirito', 'presenca', 'nome-jesus', 'santidade'],
     tempos: ['lenta', 'moderada'],
   },
   {
@@ -310,7 +574,7 @@ export const MOMENTS: Moment[] = [
     description: 'Após a palavra: resposta, quebrantamento e mover do Espírito.',
     color: 'sky',
     icon: Waves,
-    themes: ['entrega', 'espirito', 'cura', 'graca', 'avivamento'],
+    themes: ['entrega', 'espirito', 'cura', 'graca', 'avivamento', 'arrependimento', 'paz', 'fidelidade'],
     tempos: ['lenta', 'moderada'],
   },
   {
@@ -320,7 +584,7 @@ export const MOMENTS: Moment[] = [
     description: 'Fundo para oração, intercessão e clamor.',
     color: 'orchid',
     icon: Ear,
-    themes: ['oracao', 'espirito', 'entrega', 'avivamento'],
+    themes: ['oracao', 'espirito', 'entrega', 'avivamento', 'arrependimento', 'batalha', 'direcao'],
     tempos: ['lenta'],
   },
   {
@@ -330,7 +594,7 @@ export const MOMENTS: Moment[] = [
     description: 'Gratidão e generosidade no momento da oferta.',
     color: 'mint',
     icon: Coins,
-    themes: ['gratidao', 'entrega', 'fe'],
+    themes: ['gratidao', 'entrega', 'fe', 'provisao', 'fidelidade'],
     tempos: ['moderada', 'lenta'],
   },
   {
@@ -340,7 +604,7 @@ export const MOMENTS: Moment[] = [
     description: 'Memória da cruz, comunhão e exame do coração.',
     color: 'rose',
     icon: Wine,
-    themes: ['cruz', 'graca', 'amor'],
+    themes: ['cruz', 'graca', 'amor', 'arrependimento', 'unidade'],
     tempos: ['lenta'],
   },
   {
@@ -349,7 +613,7 @@ export const MOMENTS: Moment[] = [
     description: 'Convite para entregar a vida a Jesus.',
     color: 'sage',
     icon: HandHelping,
-    themes: ['graca', 'entrega', 'amor', 'cruz'],
+    themes: ['graca', 'entrega', 'amor', 'cruz', 'arrependimento', 'recomeco'],
     tempos: ['lenta'],
   },
   {
@@ -359,7 +623,7 @@ export const MOMENTS: Moment[] = [
     description: 'Fé, missão e esperança para a semana.',
     color: 'aqua',
     icon: Send,
-    themes: ['missoes', 'vitoria', 'fe', 'esperanca', 'celebracao'],
+    themes: ['missoes', 'vitoria', 'fe', 'esperanca', 'celebracao', 'volta', 'protecao'],
     tempos: ['rapida', 'moderada'],
   },
   {
@@ -368,7 +632,7 @@ export const MOMENTS: Moment[] = [
     description: 'Celebração da nova vida em Cristo.',
     color: 'sky',
     icon: Droplets,
-    themes: ['entrega', 'graca', 'cruz', 'pascoa'],
+    themes: ['entrega', 'graca', 'cruz', 'pascoa', 'recomeco'],
     tempos: ['moderada', 'lenta'],
   },
   {
@@ -378,7 +642,7 @@ export const MOMENTS: Moment[] = [
     description: 'Casamentos, apresentação de crianças, homenagens, datas.',
     color: 'coral',
     icon: CalendarHeart,
-    themes: ['amor', 'gratidao', 'natal', 'pascoa'],
+    themes: ['amor', 'gratidao', 'natal', 'pascoa', 'familia'],
     tempos: ['moderada', 'lenta', 'rapida'],
   },
 ]
@@ -413,6 +677,16 @@ export const ROLES: MinistryRole[] = [
   { id: 'midia', name: 'Mídia / Projeção', icon: Projector, color: 'aqua', prefers: 'letra' },
 ]
 
+export const ABSENCE_REASONS: Array<{ id: string; name: string; icon: LucideIcon }> = [
+  { id: 'trabalho', name: 'Trabalho', icon: Briefcase },
+  { id: 'saude', name: 'Saúde', icon: HeartPulse },
+  { id: 'viagem', name: 'Viagem', icon: Plane },
+  { id: 'familia', name: 'Família', icon: House },
+  { id: 'estudos', name: 'Estudos', icon: GraduationCap },
+  { id: 'outro', name: 'Outro motivo', icon: MessageCircle },
+]
+export const ABSENCE_REASON_BY_ID = Object.fromEntries(ABSENCE_REASONS.map((r) => [r.id, r]))
+
 export const SERVICE_PRESETS = [
   'Culto de Domingo',
   'Culto de Celebração',
@@ -424,7 +698,32 @@ export const SERVICE_PRESETS = [
 ]
 
 const byId = <T extends { id: string }>(list: T[]) => Object.fromEntries(list.map((x) => [x.id, x])) as Record<string, T>
-export const THEME_BY_ID = byId(THEMES)
+export const THEME_BY_ID: Record<string, Theme> = byId(THEMES)
+
+export function customThemeToTheme(c: Pick<CustomTheme, 'id' | 'name' | 'description' | 'icon' | 'color' | 'keywords'>): Theme {
+  return {
+    id: c.id,
+    group: 'equipe',
+    custom: true,
+    name: c.name,
+    description: c.description || 'Tema criado pela equipe.',
+    color: PASTELS.includes(c.color) ? c.color : 'lavender',
+    icon: THEME_ICONS[c.icon] ?? Sparkles,
+    keywords: (c.keywords ?? []).map((k) => normalizeForMatch(k).trim()).filter(Boolean),
+  }
+}
+
+/** Junta os temas criados pela equipe aos do app (chamado sempre que a tabela muda). */
+export function applyCustomThemes(rows: CustomTheme[]) {
+  const custom = rows.map(customThemeToTheme).sort((a, b) => a.name.localeCompare(b.name, 'pt-BR'))
+  THEMES.splice(0, THEMES.length, ...BUILTIN_THEMES, ...custom)
+  for (const k of Object.keys(THEME_BY_ID)) delete THEME_BY_ID[k]
+  Object.assign(THEME_BY_ID, byId(THEMES))
+}
+
+export function groupThemes(list: Theme[] = THEMES): Array<{ id: ThemeGroup; name: string; themes: Theme[] }> {
+  return THEME_GROUPS.map((g) => ({ ...g, themes: list.filter((t) => t.group === g.id) })).filter((g) => g.themes.length)
+}
 export const MOMENT_BY_ID = byId(MOMENTS)
 export const TEMPO_BY_ID = byId(TEMPOS)
 export const ROLE_BY_ID = byId(ROLES)

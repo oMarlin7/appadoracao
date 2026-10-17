@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { create } from 'zustand'
 import { createJSONStorage, persist } from 'zustand/middleware'
 import type { AccidentalPref } from '@/lib/music/theory'
+import { applyCustomThemes } from '@/lib/taxonomy'
 import { TABLES, type AuthUser, type DataSnapshot, type Id, type Profile, type Row, type TableName, type Tables } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -55,6 +56,11 @@ export const useData = create<DataState>()((set) => ({
   reset: () => set({ data: emptyData(), loaded: false, lastSync: null, error: null }),
   setSyncing: (syncing) => set({ syncing }),
 }))
+
+// Temas criados pela equipe entram no registro de temas antes de a tela redesenhar.
+useData.subscribe((s, prev) => {
+  if (s.data.custom_themes !== prev.data.custom_themes) applyCustomThemes(Object.values(s.data.custom_themes))
+})
 
 export function useTable<T extends TableName>(table: T): Record<Id, Tables[T]> {
   return useData((s) => s.data[table]) as Record<Id, Tables[T]>
