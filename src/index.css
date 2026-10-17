@@ -1,0 +1,373 @@
+@import 'tailwindcss';
+@import '@fontsource-variable/plus-jakarta-sans';
+
+@custom-variant dark (&:where(.dark, .dark *):not(:where(.light, .light *)));
+
+/* ------------------------------------------------------------------ */
+/* Tokens                                                              */
+/* ------------------------------------------------------------------ */
+
+:root,
+.light {
+  color-scheme: light;
+
+  --bg: #f6f5fb;
+  --surface: #ffffff;
+  --surface-2: #f2f1f9;
+  --surface-3: #e9e7f4;
+  --border: #e8e6f1;
+  --text: #1c1b2e;
+  --text-2: #4b4a62;
+  --muted: #6c6b84;
+
+  --primary: #6d5df5;
+  --primary-strong: #5a49e6;
+  --primary-ink: #ffffff;
+  --primary-soft: #eeebff;
+  --chord: #6252ee;
+  --ring: rgb(109 93 245 / 0.35);
+  --glass: rgb(255 255 255 / 0.78);
+
+  --sh-1: 0 1px 2px rgb(30 27 75 / 0.04), 0 4px 14px -6px rgb(30 27 75 / 0.1);
+  --sh-2: 0 2px 6px rgb(30 27 75 / 0.05), 0 18px 40px -16px rgb(30 27 75 / 0.22);
+  --sh-float: 0 10px 30px -10px rgb(60 48 170 / 0.45);
+
+  /* Pastéis: fundo suave · texto (tinta) · cor cheia */
+  --lavender-bg: #eeeafe;
+  --lavender-ink: #5644c9;
+  --lavender-solid: #c8bdfc;
+  --mint-bg: #dcf5ea;
+  --mint-ink: #19734f;
+  --mint-solid: #9fe2c5;
+  --peach-bg: #ffe9dd;
+  --peach-ink: #a94c22;
+  --peach-solid: #ffc3a3;
+  --sky-bg: #e0edff;
+  --sky-ink: #285eae;
+  --sky-solid: #b0cffa;
+  --rose-bg: #ffe4ee;
+  --rose-ink: #ad345f;
+  --rose-solid: #f9b4cb;
+  --butter-bg: #fff3cf;
+  --butter-ink: #85600b;
+  --butter-solid: #f7dc8f;
+  --orchid-bg: #f6e6fb;
+  --orchid-ink: #85339e;
+  --orchid-solid: #e5bcf1;
+  --aqua-bg: #daf3f3;
+  --aqua-ink: #176d6d;
+  --aqua-solid: #9edede;
+  --sage-bg: #e8f1de;
+  --sage-ink: #476628;
+  --sage-solid: #c2dca5;
+  --coral-bg: #ffe5df;
+  --coral-ink: #ad3f29;
+  --coral-solid: #fbb8a9;
+}
+
+.dark {
+  color-scheme: dark;
+
+  --bg: #0d0d17;
+  --surface: #161625;
+  --surface-2: #1d1d30;
+  --surface-3: #26263c;
+  --border: #282840;
+  --text: #f3f2fb;
+  --text-2: #cac9de;
+  --muted: #9897b2;
+
+  --primary: #a597ff;
+  --primary-strong: #b6abff;
+  --primary-ink: #15132c;
+  --primary-soft: rgb(165 151 255 / 0.16);
+  --chord: #b9afff;
+  --ring: rgb(165 151 255 / 0.4);
+  --glass: rgb(22 22 37 / 0.78);
+
+  --sh-1: 0 1px 2px rgb(0 0 0 / 0.35), 0 6px 18px -8px rgb(0 0 0 / 0.55);
+  --sh-2: 0 2px 6px rgb(0 0 0 / 0.4), 0 20px 44px -18px rgb(0 0 0 / 0.75);
+  --sh-float: 0 10px 30px -10px rgb(0 0 0 / 0.8);
+
+  --lavender-bg: rgb(200 189 252 / 0.14);
+  --lavender-ink: #d3cbff;
+  --lavender-solid: #8274e6;
+  --mint-bg: rgb(159 226 197 / 0.13);
+  --mint-ink: #a8ecd0;
+  --mint-solid: #3f9c78;
+  --peach-bg: rgb(255 195 163 / 0.13);
+  --peach-ink: #ffcdb2;
+  --peach-solid: #c9784f;
+  --sky-bg: rgb(176 207 250 / 0.13);
+  --sky-ink: #bcd7ff;
+  --sky-solid: #4f7fc9;
+  --rose-bg: rgb(249 180 203 / 0.13);
+  --rose-ink: #ffc1d6;
+  --rose-solid: #c55a80;
+  --butter-bg: rgb(247 220 143 / 0.12);
+  --butter-ink: #f8e2a4;
+  --butter-solid: #b38b2b;
+  --orchid-bg: rgb(229 188 241 / 0.13);
+  --orchid-ink: #edc9f7;
+  --orchid-solid: #a056b8;
+  --aqua-bg: rgb(158 222 222 / 0.12);
+  --aqua-ink: #aee8e8;
+  --aqua-solid: #3a9393;
+  --sage-bg: rgb(194 220 165 / 0.12);
+  --sage-ink: #cfe5b7;
+  --sage-solid: #6b8f45;
+  --coral-bg: rgb(251 184 169 / 0.13);
+  --coral-ink: #ffc6b9;
+  --coral-solid: #c4614c;
+}
+
+@theme inline {
+  --font-sans:
+    'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', 'Cascadia Code', 'Roboto Mono', Menlo, monospace;
+
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-surface-2: var(--surface-2);
+  --color-surface-3: var(--surface-3);
+  --color-line: var(--border);
+  --color-ink: var(--text);
+  --color-ink-2: var(--text-2);
+  --color-muted: var(--muted);
+  --color-primary: var(--primary);
+  --color-primary-strong: var(--primary-strong);
+  --color-primary-ink: var(--primary-ink);
+  --color-primary-soft: var(--primary-soft);
+  --color-chord: var(--chord);
+
+  --color-lavender: var(--lavender-bg);
+  --color-lavender-ink: var(--lavender-ink);
+  --color-mint: var(--mint-bg);
+  --color-mint-ink: var(--mint-ink);
+  --color-peach: var(--peach-bg);
+  --color-peach-ink: var(--peach-ink);
+  --color-sky: var(--sky-bg);
+  --color-sky-ink: var(--sky-ink);
+  --color-rose: var(--rose-bg);
+  --color-rose-ink: var(--rose-ink);
+  --color-butter: var(--butter-bg);
+  --color-butter-ink: var(--butter-ink);
+
+  --shadow-card: var(--sh-1);
+  --shadow-pop: var(--sh-2);
+  --shadow-float: var(--sh-float);
+
+  --animate-fade-in: fade-in 0.25s ease-out both;
+  --animate-rise: rise 0.35s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  --animate-pulse-soft: pulse-soft 1s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes pulse-soft {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.18);
+    opacity: 0.7;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Base                                                                */
+/* ------------------------------------------------------------------ */
+
+@layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+    overscroll-behavior-y: none;
+  }
+
+  body {
+    margin: 0;
+    min-height: 100dvh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    -webkit-tap-highlight-color: transparent;
+    text-rendering: optimizeLegibility;
+  }
+
+  ::selection {
+    background: var(--primary-soft);
+  }
+
+  :focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 2px;
+    border-radius: 10px;
+  }
+
+  button,
+  [role='button'] {
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  input,
+  textarea,
+  select {
+    font: inherit;
+    color: inherit;
+  }
+
+  * {
+    scrollbar-width: thin;
+    scrollbar-color: var(--surface-3) transparent;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ------------------------------------------------------------------ */
+/* Utilitários                                                          */
+/* ------------------------------------------------------------------ */
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+@utility glass {
+  background: var(--glass);
+  -webkit-backdrop-filter: saturate(1.6) blur(18px);
+  backdrop-filter: saturate(1.6) blur(18px);
+}
+
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Capa gerada (degradê pastel) fica um pouco mais sóbria no escuro */
+.dark .cover-art {
+  filter: saturate(0.92) brightness(0.82);
+}
+
+/* ------------------------------------------------------------------ */
+/* Cifra                                                               */
+/* ------------------------------------------------------------------ */
+
+.sheet {
+  --chord-size: 0.92em;
+  line-height: 1.35;
+}
+
+.sheet-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  min-height: 1.35em;
+}
+
+.sheet-word {
+  display: inline-flex;
+  align-items: flex-end;
+  white-space: nowrap;
+}
+
+.sheet-piece {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.sheet-chord {
+  min-height: 1.3em;
+  padding-right: 0.4em;
+  font-size: var(--chord-size);
+  font-weight: 750;
+  color: var(--chord);
+  white-space: pre;
+  letter-spacing: -0.01em;
+}
+
+.sheet-chord:empty {
+  padding-right: 0;
+}
+
+/* Acorde que flutua por cima das palavras seguintes (não alarga a sílaba). */
+.sheet-chord-float {
+  position: relative;
+  width: 0;
+  padding-right: 0;
+  overflow: visible;
+}
+
+.sheet-chord-float > .sheet-chord-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  white-space: pre;
+}
+
+.sheet-chord-btn {
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+
+.sheet-chord-btn:hover {
+  background: var(--primary-soft);
+}
+
+.sheet-text {
+  white-space: pre;
+}
+
+.sheet-chords-only {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 1.1em;
+  row-gap: 0.2em;
+}
+
+.sheet.no-chords .sheet-chord {
+  display: none;
+}

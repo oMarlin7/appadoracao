@@ -1,0 +1,341 @@
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router'
+import { toast } from 'sonner'
+import { CalendarPlus, Check, ListMusic, Lightbulb, Plus } from 'lucide-react'
+import { addToPlaylist, addToService, createPlaylist, suggestSong } from '@/lib/actions'
+import { useServices, useSongs } from '@/lib/hooks'
+import { searchSongs } from '@/lib/search'
+import { useRows, useSession } from '@/lib/store'
+import { MOMENTS, PASTELS, type Pastel } from '@/lib/taxonomy'
+import { cn, friendlyDate, plural } from '@/lib/utils'
+import type { Id, Song } from '@/types'
+import { KeyBadge, SongCover, SongRow } from './song-bits'
+import { Button } from './ui/button'
+import { Chip, EmptyState, Field, Input, SearchInput, Switch, Textarea } from './ui/primitives'
+import { Sheet } from './ui/sheet'
+
+// ---------------------------------------------------------------------------
+// Adicionar à playlist
+// ---------------------------------------------------------------------------
+
+export function AddToPlaylistSheet({ songId, open, onClose }: { songId: Id; open: boolean; onClose: () => void }) {
+  const me = useSession((s) => s.user?.id)
+  const playlists = useRows('playlists')
+  const mine = useMemo(() => playlists.filter((p) => p.ownerId === me).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [playlists, me])
+  const [creating, setCreating] = useState(false)
+
+  return (
+    <Sheet open={open} onClose={onClose} title="Adicionar à playlist">
+      {creating ? (
+        <NewPlaylistForm
+          initialSongIds={[songId]}
+          onDone={(id) => {
+            setCreating(false)
+            onClose()
+            if (id) toast.success('Playlist criada com a música')
+          }}
+        />
+      ) : (
+        <div className="space-y-1.5">
+          <button
+            type="button"
+            onClick={() => setCreating(true)}
+            className="flex w-full items-center gap-3.5 rounded-2xl border border-dashed border-surface-3 px-3 py-3 text-left font-bold text-primary hover:bg-primary-soft"
+          >
+            <span className="grid size-12 place-items-center rounded-2xl bg-primary-soft">
+              <Plus className="size-5" strokeWidth={2.4} />
+            </span>
+            Nova playlist
+          </button>
+          {mine.map((p) => {
+            const has = p.songIds.includes(songId)
+            return (
+              <button
+                key={p.id}
+                type="button"
+                disabled={has}
+                onClick={async () => {
+                  if (await addToPlaylist(p.id, songId)) toast.success(`Adicionada em “${p.name}”`)
+                  onClose()
+                }}
+                className="flex w-full items-center gap-3.5 rounded-2xl px-3 py-2.5 text-left transition-colors hover:bg-surface-2 disabled:opacity-60"
+              >
+                <span className="grid size-12 place-items-center rounded-2xl" style={{ background: `var(--${p.color}-solid)`, color: `var(--${p.color}-ink)` }}>
+                  <ListMusic className="size-5" strokeWidth={2.1} />
+                </span>
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate font-bold text-ink">{p.name}</span>
+                  <span className="block text-[13px] text-muted">
+                    {plural(p.songIds.length, 'música', 'músicas')} · {p.isShared ? 'Compartilhada' : 'Só eu'}
+                  </span>
+                </span>
+                {has && <Check className="size-5 text-primary" strokeWidth={2.5} />}
+              </button>
+            )
+          })}
+          {mine.length === 0 && <p className="px-2 pt-2 text-[13.5px] text-muted">Você ainda não tem playlists.</p>}
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+export function NewPlaylistForm({ initialSongIds = [], onDone }: { initialSongIds?: Id[]; onDone: (id: Id | null) => void }) {
+  const [name, setName] = useState('')
+  const [description, setDescription] = useState('')
+  const [color, setColor] = useState<Pastel>('lavender')
+  const [isShared, setShared] = useState(true)
+  const [saving, setSaving] = useState(false)
+  return (
+    <form
+      className="space-y-4"
+      onSubmit={async (e) => {
+        e.preventDefault()
+        if (!name.trim()) return
+        setSaving(true)
+        const id = await createPlaylist({ name, description, color, isShared, songIds: initialSongIds })
+        setSaving(false)
+        onDone(id)
+      }}
+    >
+      <Field label="Nome">{(id) => <Input id={id} autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="Ex.: Ensaio de sábado" />}</Field>
+      <Field label="Descrição" hint="opcional">
+        {(id) => <Input id={id} value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Para que serve esta playlist?" />}
+      </Field>
+      <div>
+        <div className="mb-2 text-[13px] font-semibold text-ink-2">Cor</div>
+        <div className="flex flex-wrap gap-2">
+          {PASTELS.map((c) => (
+            <button
+              key={c}
+              type="button"
+              aria-label={c}
+              onClick={() => setColor(c)}
+              className={cn('size-9 rounded-full transition-transform', color === c ? 'scale-110 ring-[3px] ring-primary ring-offset-2 ring-offset-surface' : 'hover:scale-105')}
+              style={{ background: `var(--${c}-solid)` }}
+            />
+          ))}
+        </div>
+      </div>
+      <Switch checked={isShared} onChange={setShared} label="Compartilhar com a equipe" description="Todos os membros podem ver e tocar esta playlist." />
+      <div className="flex justify-end gap-2 pt-1">
+        <Button variant="ghost" onClick={() => onDone(null)}>
+          Cancelar
+        </Button>
+        <Button type="submit" loading={saving} disabled={!name.trim()}>
+          Criar playlist
+        </Button>
+      </div>
+    </form>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Sugerir para o culto
+// ---------------------------------------------------------------------------
+
+export function SuggestSheet({ songId, open, onClose }: { songId: Id; open: boolean; onClose: () => void }) {
+  const { upcoming } = useServices()
+  const [serviceId, setServiceId] = useState<Id | null | undefined>(undefined)
+  const [note, setNote] = useState('')
+  const selected = serviceId === undefined ? (upcoming[0]?.id ?? null) : serviceId
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Sugerir para o culto"
+      description="A sugestão aparece para a equipe, que pode apoiar, e o líder decide se entra no setlist."
+      footer={
+        <Button
+          className="w-full"
+          icon={Lightbulb}
+          onClick={async () => {
+            if (await suggestSong(songId, selected, note)) toast.success('Sugestão enviada para a equipe 💡')
+            setNote('')
+            onClose()
+          }}
+        >
+          Enviar sugestão
+        </Button>
+      }
+    >
+      <div className="space-y-2">
+        {upcoming.map((s) => (
+          <button
+            key={s.id}
+            type="button"
+            onClick={() => setServiceId(s.id)}
+            className={cn(
+              'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all',
+              selected === s.id ? 'border-primary bg-primary-soft' : 'border-line hover:bg-surface-2',
+            )}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block font-bold text-ink">{s.title}</span>
+              <span className="block text-[13px] text-muted">
+                {friendlyDate(s.date)}
+                {s.time ? ` · ${s.time}` : ''}
+              </span>
+            </span>
+            {selected === s.id && <Check className="size-5 text-primary" strokeWidth={2.5} />}
+          </button>
+        ))}
+        <button
+          type="button"
+          onClick={() => setServiceId(null)}
+          className={cn(
+            'flex w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-all',
+            selected === null ? 'border-primary bg-primary-soft' : 'border-line hover:bg-surface-2',
+          )}
+        >
+          <span className="min-w-0 flex-1">
+            <span className="block font-bold text-ink">Para um culto em breve</span>
+            <span className="block text-[13px] text-muted">Sem data definida</span>
+          </span>
+          {selected === null && <Check className="size-5 text-primary" strokeWidth={2.5} />}
+        </button>
+      </div>
+      <Field label="Por que essa música?" hint="opcional" className="mt-4">
+        {(id) => (
+          <Textarea
+            id={id}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            rows={3}
+            placeholder="Ex.: conversa com a mensagem de domingo, a igreja conhece bem…"
+          />
+        )}
+      </Field>
+    </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Adicionar ao setlist de um culto
+// ---------------------------------------------------------------------------
+
+export function AddToServiceSheet({ song, open, onClose, initialKey }: { song: Song; open: boolean; onClose: () => void; initialKey?: string | null }) {
+  const { upcoming } = useServices()
+  const navigate = useNavigate()
+  const [moment, setMoment] = useState<string | null>(song.moments[0] ?? null)
+  return (
+    <Sheet open={open} onClose={onClose} title="Adicionar a um culto" description={`“${song.title}” entra no setlist${initialKey ? ` em ${initialKey}` : ''}.`}>
+      <div className="mb-4">
+        <div className="mb-2 text-[13px] font-semibold text-ink-2">Momento</div>
+        <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 md:-mx-6 md:px-6">
+          {MOMENTS.map((m) => (
+            <Chip key={m.id} size="sm" icon={m.icon} color={m.color} selected={moment === m.id} onClick={() => setMoment(moment === m.id ? null : m.id)}>
+              {m.short ?? m.name}
+            </Chip>
+          ))}
+        </div>
+      </div>
+      {upcoming.length === 0 ? (
+        <EmptyState
+          icon={CalendarPlus}
+          title="Nenhum culto agendado"
+          description="Crie o próximo culto para montar o setlist."
+          action={
+            <Button
+              icon={Plus}
+              onClick={() => {
+                onClose()
+                navigate('/cultos/novo')
+              }}
+            >
+              Novo culto
+            </Button>
+          }
+          className="py-6"
+        />
+      ) : (
+        <div className="space-y-2">
+          {upcoming.map((s) => {
+            const has = s.items.some((i) => i.songId === song.id)
+            return (
+              <button
+                key={s.id}
+                type="button"
+                disabled={has}
+                onClick={async () => {
+                  if (await addToService(s.id, song.id, { key: initialKey ?? undefined, moment })) toast.success(`Adicionada em “${s.title}”`)
+                  onClose()
+                }}
+                className="flex w-full items-center gap-3 rounded-2xl border border-line px-4 py-3 text-left transition-colors hover:bg-surface-2 disabled:opacity-60"
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block font-bold text-ink">{s.title}</span>
+                  <span className="block text-[13px] text-muted">
+                    {friendlyDate(s.date)} · {plural(s.items.length, 'música', 'músicas')}
+                  </span>
+                </span>
+                {has ? <span className="text-[12.5px] font-semibold text-muted">Já está</span> : <Plus className="size-5 text-primary" strokeWidth={2.4} />}
+              </button>
+            )
+          })}
+        </div>
+      )}
+    </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Escolher música (busca no acervo)
+// ---------------------------------------------------------------------------
+
+export function SongPickerSheet({
+  open,
+  onClose,
+  onPick,
+  title = 'Escolher música',
+  excludeIds = [],
+  suggestions,
+}: {
+  open: boolean
+  onClose: () => void
+  onPick: (song: Song) => void
+  title?: string
+  excludeIds?: Id[]
+  suggestions?: Array<{ song: Song; reason?: string; key?: string | null }>
+}) {
+  const songs = useSongs()
+  const [q, setQ] = useState('')
+  const exclude = useMemo(() => new Set(excludeIds), [excludeIds])
+  const results = useMemo(() => searchSongs(songs, q).filter((s) => !exclude.has(s.id)), [songs, q, exclude])
+
+  return (
+    <Sheet open={open} onClose={onClose} title={title} tall>
+      <div className="sticky top-0 z-10 -mx-5 bg-surface px-5 pb-3 md:-mx-6 md:px-6">
+        <SearchInput value={q} onChange={setQ} placeholder="Título, artista, trecho da letra…" />
+      </div>
+      {!q && suggestions && suggestions.length > 0 && (
+        <div className="mb-3">
+          <div className="mb-1 px-2 text-[12px] font-bold tracking-wide text-primary uppercase">Sugestões do assistente</div>
+          {suggestions.map(({ song, reason, key }) => (
+            <button
+              key={song.id}
+              type="button"
+              onClick={() => onPick(song)}
+              className="flex w-full items-center gap-3 rounded-2xl px-2 py-2 text-left hover:bg-surface-2"
+            >
+              <SongCover song={song} size={44} />
+              <span className="min-w-0 flex-1">
+                <span className="block truncate font-bold text-ink">{song.title}</span>
+                {reason && <span className="block truncate text-[12.5px] text-muted">{reason}</span>}
+              </span>
+              <KeyBadge value={key} />
+            </button>
+          ))}
+          <div className="mx-2 my-2 h-px bg-line" />
+        </div>
+      )}
+      <div className="-mx-2">
+        {results.map((s) => (
+          <SongRow key={s.id} song={s} onClick={() => onPick(s)} />
+        ))}
+        {results.length === 0 && <p className="py-8 text-center text-[14px] text-muted">Nenhuma música encontrada.</p>}
+      </div>
+    </Sheet>
+  )
+}
