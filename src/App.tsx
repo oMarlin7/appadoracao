@@ -23,14 +23,26 @@ import { SongPage } from './pages/song'
 // Tema claro/escuro
 // ---------------------------------------------------------------------------
 
+/** Tema do sistema — ou o que a página hospedeira impuser via `data-theme` (quando embutido). */
+function systemPrefersDark(): boolean {
+  const forced = document.documentElement.dataset.theme
+  if (forced === 'dark' || forced === 'light') return forced === 'dark'
+  return window.matchMedia('(prefers-color-scheme: dark)').matches
+}
+
 function useThemeEffect() {
   const theme = useSettings((s) => s.theme)
-  const [systemDark, setSystemDark] = useState(() => window.matchMedia('(prefers-color-scheme: dark)').matches)
+  const [systemDark, setSystemDark] = useState(systemPrefersDark)
   useEffect(() => {
     const mq = window.matchMedia('(prefers-color-scheme: dark)')
-    const on = () => setSystemDark(mq.matches)
+    const on = () => setSystemDark(systemPrefersDark())
     mq.addEventListener('change', on)
-    return () => mq.removeEventListener('change', on)
+    const observer = new MutationObserver(on)
+    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+    return () => {
+      mq.removeEventListener('change', on)
+      observer.disconnect()
+    }
   }, [])
   const dark = theme === 'dark' || (theme === 'system' && systemDark)
   useEffect(() => {

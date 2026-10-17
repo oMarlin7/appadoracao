@@ -1,6 +1,7 @@
 import { del, get, set } from 'idb-keyval'
 import { useEffect, useState } from 'react'
 import { backend, isDemo, isNetworkError, type ChangeEvent } from './backend'
+import { readJson, removeStorage, writeStorage } from './storage'
 import { useData } from './store'
 import type { DataSnapshot, Row, TableName } from '@/types'
 
@@ -17,15 +18,11 @@ const OUTBOX_KEY = 'adoracao:outbox'
 const cacheKey = (userId: string) => `adoracao:cache:${userId}`
 
 function readOutbox(): Op[] {
-  try {
-    return JSON.parse(localStorage.getItem(OUTBOX_KEY) ?? '[]')
-  } catch {
-    return []
-  }
+  return readJson<Op[]>('local', OUTBOX_KEY, [])
 }
 
 function writeOutbox(ops: Op[]) {
-  localStorage.setItem(OUTBOX_KEY, JSON.stringify(ops))
+  writeStorage('local', OUTBOX_KEY, JSON.stringify(ops))
   outboxListeners.forEach((l) => l(ops.length))
 }
 
@@ -148,7 +145,7 @@ export function stopSync() {
 
 export async function clearLocalCache(userId: string | null) {
   if (userId) await del(cacheKey(userId)).catch(() => {})
-  localStorage.removeItem(OUTBOX_KEY)
+  removeStorage('local', OUTBOX_KEY)
   outboxListeners.forEach((l) => l(0))
 }
 

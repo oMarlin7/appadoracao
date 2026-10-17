@@ -1,5 +1,6 @@
 import { del, get, set } from 'idb-keyval'
 import { buildDemoSeed } from '@/data/seed'
+import { readJson, readStorage, removeStorage, writeStorage } from '@/lib/storage'
 import { nowIso, uid } from '@/lib/utils'
 import { TABLES, type AuthUser, type DataSnapshot, type Profile, type Row, type TableName } from '@/types'
 import { AppError, type Backend, type ChangeEvent, type InviteCheck, type SignUpInput } from './types'
@@ -21,11 +22,7 @@ function emptySnapshot(): DataSnapshot {
 }
 
 function readAccounts(): Accounts {
-  try {
-    return JSON.parse(localStorage.getItem(ACCOUNTS_KEY) ?? '{}')
-  } catch {
-    return {}
-  }
+  return readJson<Accounts>('local', ACCOUNTS_KEY, {})
 }
 
 export interface DemoBackend extends Backend {
@@ -82,17 +79,21 @@ export function createDemoBackend(): DemoBackend {
     changeListeners.forEach((l) => l(e))
   })
 
+  // Sem armazenamento disponível, a sessão vive só enquanto a página estiver aberta.
+  let memorySession: string | null = null
+
   function currentUserId(): string | null {
-    return sessionStorage.getItem(SESSION_KEY) ?? localStorage.getItem(SESSION_KEY)
+    return readStorage('session', SESSION_KEY) ?? readStorage('local', SESSION_KEY) ?? memorySession
   }
 
   async function setSession(profileId: string | null) {
+    memorySession = profileId
     if (profileId) {
-      sessionStorage.setItem(SESSION_KEY, profileId)
-      localStorage.setItem(SESSION_KEY, profileId)
+      writeStorage('session', SESSION_KEY, profileId)
+      writeStorage('local', SESSION_KEY, profileId)
     } else {
-      sessionStorage.removeItem(SESSION_KEY)
-      localStorage.removeItem(SESSION_KEY)
+      removeStorage('session', SESSION_KEY)
+      removeStorage('local', SESSION_KEY)
     }
     const user = profileId ? { id: profileId, email: null } : null
     authListeners.forEach((l) => l(user))
@@ -145,7 +146,7 @@ export function createDemoBackend(): DemoBackend {
       persist()
       channel?.postMessage(e)
       accounts[key] = { password, profileId: id }
-      localStorage.setItem(ACCOUNTS_KEY, JSON.stringify(accounts))
+      writeStorage('local', ACCOUNTS_KEY, JSON.stringify(accounts))
       await setSession(id)
       return { needsConfirmation: false }
     },
@@ -195,7 +196,7 @@ export function createDemoBackend(): DemoBackend {
 
     async resetDemo() {
       await del(DB_KEY).catch(() => {})
-      localStorage.removeItem(ACCOUNTS_KEY)
+      removeStorage('local', ACCOUNTS_KEY)
       db = null
       loading = null
       channel?.postMessage({ type: 'reset' })

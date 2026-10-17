@@ -7,6 +7,7 @@ import { IconButton } from '@/components/ui/button'
 import { Segmented } from '@/components/ui/primitives'
 import { useAutoScroll, useDocumentTitle, useWakeLock } from '@/lib/hooks'
 import { keyNameFor, parseKey, prettyAccidentals } from '@/lib/music/theory'
+import { readStorage, writeStorage } from '@/lib/storage'
 import { useRow, useSettings, useTable } from '@/lib/store'
 import { useDefaultView, useSongSheet } from '@/lib/use-song-sheet'
 import { cn } from '@/lib/utils'
@@ -74,8 +75,8 @@ export function LivePage({ source }: { source: 'service' | 'playlist' | 'song' }
 function LiveView({ entries, index, entry, title, onExit, go }: { entries: Entry[]; index: number; entry: Entry; title: string; onExit: () => void; go: (i: number) => void }) {
   const sheet = useSongSheet(entry.song, { serviceKey: entry.key })
   const defaultView = useDefaultView(sheet.hasChords)
-  const [mode, setMode] = useState<'cifra' | 'letra'>(() => (sessionStorage.getItem('adoracao:live-mode') as 'cifra' | 'letra' | null) ?? defaultView)
-  const [dark, setDark] = useState(() => localStorage.getItem('adoracao:stage-light') !== '1')
+  const [mode, setMode] = useState<'cifra' | 'letra'>(() => (readStorage('session', 'adoracao:live-mode') as 'cifra' | 'letra' | null) ?? defaultView)
+  const [dark, setDark] = useState(() => readStorage('local', 'adoracao:stage-light') !== '1')
   const fontScale = useSettings((s) => s.fontScale)
   const speed = useSettings((s) => s.autoScrollSpeed)
   const setSetting = useSettings((s) => s.set)
@@ -88,7 +89,7 @@ function LiveView({ entries, index, entry, title, onExit, go }: { entries: Entry
   const effectiveMode = sheet.hasChords ? mode : 'letra'
 
   useEffect(() => {
-    sessionStorage.setItem('adoracao:live-mode', mode)
+    writeStorage('session', 'adoracao:live-mode', mode)
   }, [mode])
 
   useEffect(() => {
@@ -142,7 +143,7 @@ function LiveView({ entries, index, entry, title, onExit, go }: { entries: Entry
             />
           )}
           <IconButton icon={dark ? Sun : Moon} label={dark ? 'Tela clara' : 'Tela escura'} size="sm" onClick={() => {
-            localStorage.setItem('adoracao:stage-light', dark ? '1' : '0')
+            writeStorage('local', 'adoracao:stage-light', dark ? '1' : '0')
             setDark(!dark)
           }} />
           {document.fullscreenEnabled && (
