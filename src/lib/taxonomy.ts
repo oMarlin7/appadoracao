@@ -687,15 +687,6 @@ export const ABSENCE_REASONS: Array<{ id: string; name: string; icon: LucideIcon
 ]
 export const ABSENCE_REASON_BY_ID = Object.fromEntries(ABSENCE_REASONS.map((r) => [r.id, r]))
 
-export const SERVICE_PRESETS = [
-  'Culto de Domingo',
-  'Culto de Celebração',
-  'Culto de Oração',
-  'Culto de Jovens',
-  'Culto de Santa Ceia',
-  'Ensaio',
-  'Evento especial',
-]
 
 const byId = <T extends { id: string }>(list: T[]) => Object.fromEntries(list.map((x) => [x.id, x])) as Record<string, T>
 export const THEME_BY_ID: Record<string, Theme> = byId(THEMES)

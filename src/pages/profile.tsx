@@ -29,6 +29,7 @@ import {
   Trash2,
   Upload,
   Users,
+  Vote,
 } from 'lucide-react'
 import { Avatar } from '@/components/avatar'
 import { HeaderAvatar, Page, PageHeader } from '@/components/layout'
@@ -201,6 +202,63 @@ export function ProfilePage() {
         </button>
       </Card>
     </Page>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Como a equipe escolhe as músicas (líder)
+// ---------------------------------------------------------------------------
+
+function SongSelectionCard() {
+  const team = useTeam()
+  const mode = team?.selectionMode === 'votacao' ? 'votacao' : 'lider'
+  const picks = team?.votingPicks ?? 2
+  return (
+    <Card className="mt-5 overflow-hidden">
+      <div className="flex items-start gap-3 bg-orchid p-5 text-orchid-ink">
+        <Vote className="mt-0.5 size-5 shrink-0" />
+        <div>
+          <div className="text-[15px] font-bold">Escolha das músicas dos cultos</div>
+          <p className="mt-0.5 text-[13px] opacity-85">Só o líder coloca músicas no setlist. A equipe sugere — e, se você quiser, vota.</p>
+        </div>
+      </div>
+      <div className="space-y-4 p-5">
+        <Segmented
+          className="w-full"
+          value={mode}
+          onChange={async (v) => {
+            if (await updateTeam({ selectionMode: v }))
+              toast.success(v === 'votacao' ? 'Votação semanal ligada 🗳️' : 'Você escolhe as músicas direto')
+          }}
+          options={[
+            { value: 'lider', label: 'Líder escolhe', icon: Crown },
+            { value: 'votacao', label: 'Votação semanal', icon: Vote },
+          ]}
+        />
+        {mode === 'votacao' ? (
+          <>
+            <div className="rounded-2xl bg-surface-2 p-4 text-[13.5px] leading-relaxed text-ink-2">
+              <b className="text-ink">Toda quinta às 12h</b> abre a votação com as sugestões da equipe e <b className="text-ink">fecha no sábado às 12h</b>. As mais votadas entram
+              sozinhas no setlist, a tempo do ensaio da quinta seguinte — para o culto do domingo depois do ensaio. Você pode mudar prazo e quantidade em cada evento ou
+              escolher direto quando quiser.
+            </div>
+            <div>
+              <div className="mb-2 text-[13px] font-semibold text-ink-2">Músicas escolhidas na votação</div>
+              <Segmented
+                value={String(picks)}
+                onChange={(v) => void updateTeam({ votingPicks: Number(v) })}
+                options={[
+                  { value: '2', label: '2 músicas' },
+                  { value: '3', label: '3 músicas' },
+                ]}
+              />
+            </div>
+          </>
+        ) : (
+          <p className="text-[13px] text-muted">Os membros sugerem e apoiam; você aceita as sugestões ou monta o setlist direto.</p>
+        )}
+      </div>
+    </Card>
   )
 }
 
@@ -473,6 +531,8 @@ export function TeamPage() {
               </Button>
             </div>
           </Card>
+
+          <SongSelectionCard />
 
           <Card className="mt-5 space-y-4 p-5">
             <Field label="Nome do ministério">{(id) => <Input id={id} value={name} onChange={(e) => setName(e.target.value)} />}</Field>

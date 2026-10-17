@@ -178,7 +178,7 @@ function SongList({ songs, query, grid, groupByLetter }: { songs: Song[]; query?
 
 export function LibraryPage() {
   const themes = useThemes()
-  useDocumentTitle('Acervo')
+  useDocumentTitle('Músicas')
   const songs = useSongs()
   const favIds = useFavoriteIds()
   const plays = usePlayCounts()
@@ -210,8 +210,8 @@ export function LibraryPage() {
   return (
     <Page wide>
       <PageHeader
-        title="Acervo"
-        subtitle={`${plural(songs.length, 'música', 'músicas')} do ministério`}
+        title="Músicas"
+        subtitle={`${plural(songs.length, 'música', 'músicas')} no repertório do ministério`}
         actions={
           <>
             <LinkButton to="/musica/nova" icon={Plus} className="hidden sm:inline-flex">

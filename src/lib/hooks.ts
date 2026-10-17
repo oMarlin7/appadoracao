@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useRows, useSession, useSettings, useTable } from './store'
+import { isPresentation } from './events'
 import { THEMES, type Theme } from './taxonomy'
 import { todayString } from './utils'
 import type { Id, Service, Song } from '@/types'
@@ -45,9 +46,10 @@ export function useServices(): { upcoming: Service[]; past: Service[] } {
   }, [rows])
 }
 
+/** Próximo evento de apresentação (culto, festa, congresso…), sem contar ensaio e reuniões. */
 export function useNextService(): Service | undefined {
   const { upcoming } = useServices()
-  return upcoming.find((s) => s.title.toLowerCase() !== 'ensaio') ?? upcoming[0]
+  return upcoming.find(isPresentation)
 }
 
 /** Quantas vezes cada música foi tocada nos cultos já registrados. */

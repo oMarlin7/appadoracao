@@ -155,6 +155,14 @@
   --color-rose-ink: var(--rose-ink);
   --color-butter: var(--butter-bg);
   --color-butter-ink: var(--butter-ink);
+  --color-orchid: var(--orchid-bg);
+  --color-orchid-ink: var(--orchid-ink);
+  --color-aqua: var(--aqua-bg);
+  --color-aqua-ink: var(--aqua-ink);
+  --color-sage: var(--sage-bg);
+  --color-sage-ink: var(--sage-ink);
+  --color-coral: var(--coral-bg);
+  --color-coral-ink: var(--coral-ink);
 
   --shadow-card: var(--sh-1);
   --shadow-pop: var(--sh-2);
@@ -211,9 +219,6 @@
   body {
     margin: 0;
     min-height: 100dvh;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     -webkit-tap-highlight-color: transparent;
@@ -247,6 +252,31 @@
     scrollbar-width: thin;
     scrollbar-color: var(--surface-3) transparent;
   }
+}
+
+/*
+ * Fundo, cor do texto e fonte ficam FORA das camadas do Tailwind: estilos sem camada vencem
+ * qualquer camada, e uma página que embute o app (ex.: a prévia publicada) costuma trazer
+ * `body { background: #fff; font: … }`. Dentro de @layer base, isso deixava o fundo branco
+ * no modo escuro, com o texto claro quase invisível por cima.
+ */
+html,
+html body,
+#root {
+  background-color: var(--bg);
+  color: var(--text);
+  font-family:
+    'Plus Jakarta Sans Variable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto,
+    sans-serif;
+}
+
+html body {
+  font-size: 16px;
+  line-height: 1.5;
+}
+
+#root {
+  min-height: 100dvh;
 }
 
 @media (prefers-reduced-motion: reduce) {

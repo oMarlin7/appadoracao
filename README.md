@@ -1,6 +1,6 @@
 # Adoração · app do ministério de louvor
 
-Repertório organizado por **tema, significado e momento do culto**, **importação rápida pelo link do YouTube ou Spotify**, **cifras** que mudam de tom na hora, **letras** para os cantores, **player** e **gravações de ensaio**, **cultos com setlist, escala e presença**, **sugestões**, **playlists** e **chat** da equipe — num app leve, bonito e que funciona até sem internet.
+Repertório organizado por **tema, significado e momento do culto**, **importação rápida pelo link do YouTube ou Spotify**, **cifras** que mudam de tom na hora, **letras** para os cantores, **player** e **gravações de ensaio**, **programação** com setlist, escala e presença, **votação das músicas**, painel **“Para você”** com lembretes e avisos personalizados, **sugestões**, **playlists** e **chat** da equipe — num app leve, bonito e que funciona até sem internet.
 
 ![Telas do app no celular](docs/preview.png)
 
@@ -41,10 +41,20 @@ Repertório organizado por **tema, significado e momento do culto**, **importaç
 - No dia, o líder (ou quem ministra) marca **presente/ausente** — com “todos presentes” em um toque.
 - Tela **Presença**: ausências avisadas para os próximos cultos, **frequência** de cada membro (30/90 dias ou tudo) e histórico com as justificativas.
 
+**Votação das músicas (como a enquete do WhatsApp, só que organizada)**
+- O líder escolhe em **Equipe → Escolha das músicas**: *Líder escolhe* ou *Votação semanal*.
+- Na votação semanal, **toda quinta às 12h** abre a votação do culto e ela **fecha no sábado às 12h**, a tempo do ensaio da quinta seguinte (para o culto do domingo depois do ensaio). Cada membro vota em até **2 músicas** (ou 3, se o líder preferir) entre as **sugestões** da equipe.
+- Ao fechar, as mais votadas **entram sozinhas no setlist** (empate: vale a sugestão mais antiga). O líder pode abrir antes, encerrar na hora, mudar para 3 músicas ou escolher direto num evento específico.
+
+**Para você — o painel de cada membro**
+- No topo do início (e no 🔔 em qualquer tela), cada pessoa vê lembretes **só seus, chamando pelo nome**: que está na escala (com botão para confirmar presença), o ensaio da semana, a votação aberta (com contagem regressiva), um convite para sugerir música, o resultado da votação, faltas sem justificativa, **parabéns pela frequência alta** ou um carinho quando a frequência cai — com anéis de progresso, capas, avatares e animações.
+- O líder vê também as pendências dele (quem não confirmou, quem avisou ausência na escala, setlist vazio, sugestões esperando) e **publica avisos** para a equipe toda, para funções (ex.: só as vozes) ou para pessoas específicas.
+
 **Equipe**
 - Contas individuais com e-mail e senha, liberadas por **código de convite**, com **foto de perfil**.
-- **Cultos** com setlist (arraste para reordenar), observações por música, alerta de saltos de tom e **escala** (quem ministra, canta e toca).
-- **Sugestões para o culto**: qualquer membro sugere, a equipe apoia (👍) e o líder aceita — a música entra no setlist.
+- **Programação** com cultos, festas, congressos e eventos especiais (apresentações) e também ensaios, reuniões e confraternizações. O **próximo evento** do início considera só as apresentações.
+- Setlist (arraste para reordenar), observações por música, alerta de saltos de tom e **escala** (quem ministra, canta e toca).
+- **Só o líder coloca músicas no culto.** Os membros usam **Sugerir** (em cada música e em cada evento): a sugestão vai para a votação ou para o líder aceitar.
 - **Favoritas** e **playlists** (só suas ou compartilhadas com a equipe).
 - **Chat** em tempo real com reações e compartilhamento de músicas e cultos.
 
@@ -75,14 +85,14 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 
 ### 1. Criar o banco no Supabase
 1. Crie uma conta em supabase.com → **New project** (região *South America (São Paulo)*).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios).
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) e, por último, com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist).
 3. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public**.
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
 5. Opcional: em **Authentication → Sign In / Providers → Email**, desligue *Confirm email* se não quiser que cada membro confirme o e-mail antes de entrar (o código de convite já protege o cadastro).
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
 
-> **Já tinha o app no ar?** Rode só o arquivo `…_v2_midia_presenca.sql` no SQL Editor. Até lá o app continua funcionando, mas sem salvar presença, gravações, temas novos, fotos e capas.
+> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql` e/ou `…_v3_votacao_avisos.sql`). Até lá o app continua funcionando, mas sem as funções novas.
 
 ### 2. Publicar o app
 **Vercel**: *Add New → Project* → importe este repositório → em *Environment Variables* adicione:
@@ -177,14 +187,17 @@ src/
   lib/player.ts    player das gravações (continua tocando entre as telas)
   lib/recorder.ts  gravação pelo microfone
   lib/attendance.ts cálculo de presença e frequência
+  lib/events.ts    tipos de evento (apresentação × ensaio/reunião)
+  lib/voting.ts    regra da votação (quinta 12h → sábado 12h), apuração e desempate
+  lib/inbox.ts     painel "Para você": lembretes e avisos de cada membro
   pages/           telas
   components/      componentes visuais (cifra, capas, sheets, layout…)
   data/            acervo inicial e equipe de demonstração
-supabase/migrations/  esquema do banco com regras de segurança por linha (init + v2)
+supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2 e v3)
 supabase/functions/   função importar-musica (dados dos links e análise com IA)
 ```
 
-**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (favoritas, mensagens, playlists, preferências, a própria presença); o acervo e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder.
+**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (favoritas, mensagens, playlists, preferências, a própria presença); o acervo e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; **só o líder coloca, tira ou reordena músicas do setlist e aceita sugestões** (o banco recusa de outros membros); cada um vota em até N músicas, só enquanto a votação está aberta, e só em músicas sugeridas; o resultado é aplicado por uma função do banco que confere prazo e votos; avisos direcionados só chegam a quem foi escolhido; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder.
 
 ## Próximos passos sugeridos
 

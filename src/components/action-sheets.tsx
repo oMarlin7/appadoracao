@@ -1,11 +1,13 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
-import { CalendarPlus, Check, ListMusic, Lightbulb, Plus } from 'lucide-react'
+import { CalendarPlus, Check, ListMusic, Lightbulb, Plus, Vote as VoteIcon } from 'lucide-react'
 import { addToPlaylist, addToService, createPlaylist, suggestSong } from '@/lib/actions'
 import { useServices, useSongs } from '@/lib/hooks'
 import { searchSongs } from '@/lib/search'
-import { useRows, useSession } from '@/lib/store'
+import { isPresentation } from '@/lib/events'
+import { useRows, useSession, useTable } from '@/lib/store'
+import { formatDeadline, votingActive, votingInfo } from '@/lib/voting'
 import { MOMENTS, PASTELS, type Pastel } from '@/lib/taxonomy'
 import { cn, friendlyDate, plural } from '@/lib/utils'
 import type { Id, Song } from '@/types'
@@ -134,34 +136,55 @@ export function NewPlaylistForm({ initialSongIds = [], onDone }: { initialSongId
 // Sugerir para o culto
 // ---------------------------------------------------------------------------
 
-export function SuggestSheet({ songId, open, onClose }: { songId: Id; open: boolean; onClose: () => void }) {
+export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { songId: Id; open: boolean; onClose: () => void; serviceId?: Id | null }) {
   const { upcoming } = useServices()
+  const team = useTable('team_settings').team
+  const polls = useTable('song_polls')
+  const suggestions = useRows('suggestions')
+  const events = useMemo(() => upcoming.filter(isPresentation).slice(0, 6), [upcoming])
+  const votes = useRows('votes')
+  const withInfo = events.map((s) => {
+    const info = votingInfo(s, team, polls[s.id])
+    return { s, info: { ...info, enabled: votingActive(info, votes.some((v) => v.serviceId === s.id)) } }
+  })
+  const best = withInfo.find((x) => x.info.phase === 'aberta') ?? withInfo.find((x) => x.info.phase === 'agendada') ?? withInfo[0]
   const [serviceId, setServiceId] = useState<Id | null | undefined>(undefined)
   const [note, setNote] = useState('')
-  const selected = serviceId === undefined ? (upcoming[0]?.id ?? null) : serviceId
+  useEffect(() => {
+    if (open) setServiceId(preset)
+  }, [open, preset])
+  const selected = serviceId === undefined ? (best?.s.id ?? null) : serviceId
+  const selectedInfo = withInfo.find((x) => x.s.id === selected)?.info
+  const already = suggestions.some((g) => g.songId === songId && g.serviceId === selected && g.status === 'pendente')
 
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title="Sugerir para o culto"
-      description="A sugestão aparece para a equipe, que pode apoiar, e o líder decide se entra no setlist."
+      title="Sugerir música"
+      description={
+        selectedInfo?.enabled
+          ? 'As sugestões viram as opções da votação da equipe. As mais votadas entram no setlist.'
+          : 'A sugestão vai para o líder, que escolhe as músicas do culto. A equipe pode apoiar.'
+      }
       footer={
         <Button
           className="w-full"
           icon={Lightbulb}
+          disabled={already}
           onClick={async () => {
-            if (await suggestSong(songId, selected, note)) toast.success('Sugestão enviada para a equipe 💡')
+            if (await suggestSong(songId, selected, note))
+              toast.success(selectedInfo?.phase === 'aberta' ? 'Sugestão na votação! Agora é só votar 🗳️' : 'Sugestão enviada para a equipe 💡')
             setNote('')
             onClose()
           }}
         >
-          Enviar sugestão
+          {already ? 'Já sugerida para este evento' : 'Enviar sugestão'}
         </Button>
       }
     >
       <div className="space-y-2">
-        {upcoming.map((s) => (
+        {withInfo.map(({ s, info }) => (
           <button
             key={s.id}
             type="button"
@@ -177,8 +200,18 @@ export function SuggestSheet({ songId, open, onClose }: { songId: Id; open: bool
                 {friendlyDate(s.date)}
                 {s.time ? ` · ${s.time}` : ''}
               </span>
+              {info.enabled && (
+                <span className={cn('mt-1 inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[11.5px] font-bold', info.phase === 'aberta' ? 'bg-orchid text-orchid-ink' : 'bg-surface-2 text-ink-2')}>
+                  <VoteIcon className="size-3" />
+                  {info.phase === 'aberta'
+                    ? `Votação aberta · fecha ${formatDeadline(info.closesAt, team?.timezone)}`
+                    : info.phase === 'agendada'
+                      ? `Votação abre ${formatDeadline(info.opensAt, team?.timezone)}`
+                      : 'Votação encerrada'}
+                </span>
+              )}
             </span>
-            {selected === s.id && <Check className="size-5 text-primary" strokeWidth={2.5} />}
+            {selected === s.id && <Check className="size-5 shrink-0 text-primary" strokeWidth={2.5} />}
           </button>
         ))}
         <button
@@ -191,7 +224,7 @@ export function SuggestSheet({ songId, open, onClose }: { songId: Id; open: bool
         >
           <span className="min-w-0 flex-1">
             <span className="block font-bold text-ink">Para um culto em breve</span>
-            <span className="block text-[13px] text-muted">Sem data definida</span>
+            <span className="block text-[13px] text-muted">Sem data definida — o líder vê na lista de sugestões</span>
           </span>
           {selected === null && <Check className="size-5 text-primary" strokeWidth={2.5} />}
         </button>
@@ -220,7 +253,7 @@ export function AddToServiceSheet({ song, open, onClose, initialKey }: { song: S
   const navigate = useNavigate()
   const [moment, setMoment] = useState<string | null>(song.moments[0] ?? null)
   return (
-    <Sheet open={open} onClose={onClose} title="Adicionar a um culto" description={`“${song.title}” entra no setlist${initialKey ? ` em ${initialKey}` : ''}.`}>
+    <Sheet open={open} onClose={onClose} title="Adicionar a um evento" description={`“${song.title}” entra no setlist${initialKey ? ` em ${initialKey}` : ''}.`}>
       <div className="mb-4">
         <div className="mb-2 text-[13px] font-semibold text-ink-2">Momento</div>
         <div className="no-scrollbar -mx-5 flex gap-2 overflow-x-auto px-5 md:-mx-6 md:px-6">
@@ -234,8 +267,8 @@ export function AddToServiceSheet({ song, open, onClose, initialKey }: { song: S
       {upcoming.length === 0 ? (
         <EmptyState
           icon={CalendarPlus}
-          title="Nenhum culto agendado"
-          description="Crie o próximo culto para montar o setlist."
+          title="Nenhum evento agendado"
+          description="Crie o próximo culto ou evento para montar o setlist."
           action={
             <Button
               icon={Plus}
@@ -244,7 +277,7 @@ export function AddToServiceSheet({ song, open, onClose, initialKey }: { song: S
                 navigate('/cultos/novo')
               }}
             >
-              Novo culto
+              Novo evento
             </Button>
           }
           className="py-6"

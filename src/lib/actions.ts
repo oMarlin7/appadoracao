@@ -2,10 +2,12 @@ import { toast } from 'sonner'
 import { backend, isNetworkError } from './backend'
 import { normalizeKeyName } from './music/theory'
 import { currentUserId, getData, useData } from './store'
-import { enqueue } from './sync'
+import { enqueue, refresh } from './sync'
 import type { Pastel } from './taxonomy'
 import { normalizeSearch, nowIso, todayString, uid } from './utils'
+import { itemsFromWinners, tally, votingInfo, winners } from './voting'
 import type {
+  Announcement,
   Attendance,
   AttendanceStatus,
   CustomTheme,
@@ -18,12 +20,14 @@ import type {
   Service,
   SetlistItem,
   Song,
+  SongPoll,
   SongPref,
   Suggestion,
   SuggestionStatus,
   TableName,
   Tables,
   TeamSettings,
+  Vote,
 } from '@/types'
 
 // ---------------------------------------------------------------------------
@@ -158,6 +162,7 @@ export async function deleteSong(id: Id): Promise<boolean> {
   for (const f of Object.values(data.favorites)) if (f.songId === id) cascade('favorites', f.id)
   for (const p of Object.values(data.song_prefs)) if (p.songId === id) cascade('song_prefs', p.id)
   for (const r of Object.values(data.recordings)) if (r.songId === id) detach(r.id, { songId: null })
+  for (const v of Object.values(data.votes)) if (v.songId === id) cascade('votes', v.id)
   for (const s of Object.values(data.suggestions))
     if (s.songId === id) {
       cascade('suggestions', s.id)
@@ -265,6 +270,7 @@ export function newService(partial: Partial<Service> = {}): Service {
   return {
     id: uid(),
     title: 'Culto de Domingo',
+    kind: 'culto',
     date: todayString(),
     time: '19:00',
     theme: '',
@@ -294,13 +300,26 @@ export async function deleteService(id: Id): Promise<boolean> {
       for (const r of Object.values(data.reactions)) if (r.targetId === s.id) cascade('reactions', r.id)
     }
   for (const a of Object.values(data.attendance)) if (a.serviceId === id) cascade('attendance', a.id)
+  for (const v of Object.values(data.votes)) if (v.serviceId === id) cascade('votes', v.id)
+  if (data.song_polls[id]) cascade('song_polls', id)
   for (const r of Object.values(data.recordings)) if (r.serviceId === id) detach(r.id, { serviceId: null })
   return true
 }
 
+/** Só o líder escolhe as músicas do culto (no Supabase o banco também garante). */
+export function canEditSetlist(): boolean {
+  return getData().profiles[currentUserId() ?? '']?.role === 'admin'
+}
+
+function leaderOnly(): boolean {
+  if (canEditSetlist()) return true
+  toast.error('Só o líder escolhe as músicas do culto', { description: 'Use “Sugerir” para indicar uma música — ela entra na votação ou vai para o líder.' })
+  return false
+}
+
 export async function updateServiceItems(serviceId: Id, items: SetlistItem[]): Promise<boolean> {
   const s = getData().services[serviceId]
-  if (!s) return false
+  if (!s || !leaderOnly()) return false
   return save('services', { ...s, items, updatedAt: nowIso() })
 }
 
@@ -355,7 +374,7 @@ export async function suggestSong(songId: Id, serviceId: Id | null, note: string
 
 export async function setSuggestionStatus(id: Id, status: SuggestionStatus): Promise<boolean> {
   const s = getData().suggestions[id]
-  if (!s) return false
+  if (!s || !leaderOnly()) return false
   const ok = await save('suggestions', { ...s, status, updatedAt: nowIso() })
   if (ok && status === 'aceita' && s.serviceId) {
     const service = getData().services[s.serviceId]
@@ -471,6 +490,136 @@ export async function setAttendance(
 
 export async function clearAttendance(serviceId: Id, userId: Id) {
   return destroy('attendance', attendanceId(serviceId, userId))
+}
+
+// ---------------------------------------------------------------------------
+// Votação das músicas
+// ---------------------------------------------------------------------------
+
+export const voteId = (serviceId: Id, userId: Id, songId: Id) => `${serviceId}:${userId}:${songId}`
+
+export function pollInfo(serviceId: Id, now = new Date()) {
+  const data = getData()
+  const svc = data.services[serviceId]
+  return svc ? votingInfo(svc, data.team_settings.team, data.song_polls[serviceId], now) : null
+}
+
+/** Vota (ou tira o voto) numa música sugerida. Cada um vota em até N músicas. */
+export async function toggleVote(serviceId: Id, songId: Id): Promise<boolean> {
+  const userId = me()
+  const data = getData()
+  const info = pollInfo(serviceId)
+  if (!info || info.phase !== 'aberta' || info.applied) {
+    toast('A votação deste evento não está aberta')
+    return false
+  }
+  const id = voteId(serviceId, userId, songId)
+  if (data.votes[id]) return destroy('votes', id)
+  const mine = Object.values(data.votes).filter((v) => v.serviceId === serviceId && v.userId === userId)
+  if (mine.length >= info.picks) {
+    toast(`Você já escolheu ${info.picks} músicas`, { description: 'Toque numa delas para tirar o voto e trocar.' })
+    return false
+  }
+  const vote: Vote = { id, serviceId, userId, songId, createdAt: nowIso() }
+  return save('votes', vote)
+}
+
+/** O líder ajusta a votação deste evento (modo, quantidade, prazo). */
+export async function setPoll(serviceId: Id, patch: Partial<Pick<SongPoll, 'mode' | 'picks' | 'opensAt' | 'closesAt' | 'appliedAt'>>) {
+  if (!leaderOnly()) return false
+  const prev = getData().song_polls[serviceId]
+  const now = nowIso()
+  const base: SongPoll = prev ?? { id: serviceId, mode: 'votacao', picks: null, opensAt: null, closesAt: null, appliedAt: null, createdBy: currentUserId(), createdAt: now, updatedAt: now }
+  return save('song_polls', { ...base, ...patch, updatedAt: now })
+}
+
+export async function openPollNow(serviceId: Id) {
+  const info = pollInfo(serviceId)
+  if (!info) return false
+  const now = Date.now()
+  const closes = info.closesAt.getTime() > now + 3600_000 ? info.closesAt : new Date(now + 2 * 86400_000)
+  return setPoll(serviceId, { mode: 'votacao', opensAt: new Date(now - 1000).toISOString(), closesAt: closes.toISOString(), appliedAt: null })
+}
+
+export async function closePollNow(serviceId: Id) {
+  const info = pollInfo(serviceId)
+  if (!info) return false
+  const now = Date.now()
+  return setPoll(serviceId, {
+    opensAt: info.opensAt.getTime() < now ? info.opensAt.toISOString() : new Date(now - 2000).toISOString(),
+    closesAt: new Date(now - 1000).toISOString(),
+  })
+}
+
+const applying = new Set<Id>()
+/** Falhas que não são de rede (ex.: banco sem a migração v3) não são repetidas a cada minuto. */
+const applyFailed = new Set<Id>()
+
+/**
+ * Leva as mais votadas para o setlist depois do prazo. Qualquer aparelho da equipe pode fazer
+ * isso (no Supabase pela função aplicar_votacao, que confere prazo e votos no banco).
+ */
+export async function applyPoll(serviceId: Id): Promise<boolean> {
+  const data = getData()
+  const svc = data.services[serviceId]
+  const info = pollInfo(serviceId)
+  if (!svc || !info || !info.enabled || info.phase !== 'encerrada' || info.applied || applying.has(serviceId) || applyFailed.has(serviceId)) return false
+  const win = winners(tally(serviceId, Object.values(data.suggestions), Object.values(data.votes), (id) => !!data.songs[id]), info.picks)
+  if (!win.length) return false
+  applying.add(serviceId)
+  try {
+    if (backend.mode === 'supabase') {
+      await backend.rpc<number>('aplicar_votacao', { sid: serviceId })
+      await refresh()
+      return true
+    }
+    const now = nowIso()
+    await save('services', { ...svc, items: itemsFromWinners(svc.items, win, data.songs), updatedAt: now })
+    for (const s of Object.values(data.suggestions))
+      if (s.serviceId === serviceId && win.some((w) => w.songId === s.songId) && s.status !== 'aceita') await save('suggestions', { ...s, status: 'aceita', updatedAt: now })
+    const base: SongPoll = data.song_polls[serviceId] ?? { id: serviceId, mode: 'votacao', picks: null, opensAt: null, closesAt: null, appliedAt: null, createdBy: null, createdAt: now, updatedAt: now }
+    await save('song_polls', { ...base, appliedAt: now, updatedAt: now })
+    return true
+  } catch (e) {
+    if (!isNetworkError(e)) {
+      applyFailed.add(serviceId)
+      console.warn('Não foi possível aplicar a votação', e)
+    }
+    return false
+  } finally {
+    applying.delete(serviceId)
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Avisos do líder
+// ---------------------------------------------------------------------------
+
+export async function saveAnnouncement(input: Partial<Announcement> & Pick<Announcement, 'title'>): Promise<Id | null> {
+  if (getData().profiles[currentUserId() ?? '']?.role !== 'admin') {
+    toast.error('Só o líder publica avisos')
+    return null
+  }
+  const prev = input.id ? getData().announcements[input.id] : undefined
+  const now = nowIso()
+  const row: Announcement = {
+    id: prev?.id ?? uid(),
+    title: input.title.trim(),
+    body: (input.body ?? prev?.body ?? '').trim(),
+    icon: input.icon ?? prev?.icon ?? 'megaphone',
+    color: input.color ?? prev?.color ?? 'lavender',
+    audience: input.audience ?? prev?.audience ?? [],
+    pinned: input.pinned ?? prev?.pinned ?? false,
+    endsOn: input.endsOn !== undefined ? input.endsOn : (prev?.endsOn ?? null),
+    createdBy: prev?.createdBy ?? currentUserId(),
+    createdAt: prev?.createdAt ?? now,
+    updatedAt: now,
+  }
+  return (await save('announcements', row)) ? row.id : null
+}
+
+export async function deleteAnnouncement(id: Id) {
+  return destroy('announcements', id)
 }
 
 // ---------------------------------------------------------------------------

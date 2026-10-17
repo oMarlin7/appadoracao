@@ -120,6 +120,7 @@ function SongView({ song }: { song: Song }) {
   const navigate = useNavigate()
   const me = useMe()
   const canDelete = me?.role === 'admin' || song.createdBy === me?.id
+  const isLeader = me?.role === 'admin'
   const seq = useSequence(song.id)
   const recordingCount = useRows('recordings').filter((r) => r.songId === song.id).length
   const sheet = useSongSheet(song, { serviceKey: seq?.serviceKey })
@@ -183,9 +184,9 @@ function SongView({ song }: { song: Song }) {
             <Menu
               items={[
                 { label: 'Editar música', icon: Pencil, onSelect: () => navigate(`/musica/${song.id}/editar`) },
-                { label: 'Adicionar a um culto', icon: CalendarPlus, onSelect: () => setSheetOpen('service') },
+                { label: 'Adicionar a um evento', icon: CalendarPlus, hidden: !isLeader, description: 'Só o líder escolhe as músicas', onSelect: () => setSheetOpen('service') },
                 { label: 'Adicionar à playlist', icon: ListPlus, onSelect: () => setSheetOpen('playlist') },
-                { label: 'Sugerir para o culto', icon: Lightbulb, onSelect: () => setSheetOpen('suggest') },
+                { label: 'Sugerir para um culto', icon: Lightbulb, onSelect: () => setSheetOpen('suggest') },
                 {
                   label: 'Enviar no chat da equipe',
                   icon: MessageCircle,
@@ -263,7 +264,29 @@ function SongView({ song }: { song: Song }) {
           </div>
         )}
 
-        <div className="mt-5 flex items-center justify-between gap-3">
+        <div className="mt-5 flex flex-wrap items-center gap-2">
+          <Button size="sm" icon={Lightbulb} onClick={() => setSheetOpen('suggest')}>
+            Sugerir para o culto
+          </Button>
+          {tab !== 'sobre' && (
+            <Button
+              variant={listening ? 'primary' : hasMedia ? 'soft' : 'outline'}
+              size="sm"
+              icon={Headphones}
+              aria-expanded={listening}
+              onClick={() => setListening((v) => !v)}
+            >
+              Ouvir
+            </Button>
+          )}
+          {isLeader && (
+            <Button variant="outline" size="sm" icon={CalendarPlus} onClick={() => setSheetOpen('service')}>
+              Pôr no culto
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-4">
           <Segmented<Tab>
             value={tab}
             onChange={setTab}
@@ -273,25 +296,6 @@ function SongView({ song }: { song: Song }) {
               { value: 'sobre' as Tab, label: 'Sobre' },
             ]}
           />
-          <div className="flex items-center gap-1.5">
-            {tab !== 'sobre' && (
-              <Button
-                variant={listening ? 'primary' : hasMedia ? 'soft' : 'outline'}
-                size="sm"
-                icon={Headphones}
-                aria-expanded={listening}
-                onClick={() => setListening((v) => !v)}
-              >
-                Ouvir
-              </Button>
-            )}
-            <Button variant="soft" size="sm" icon={Lightbulb} onClick={() => setSheetOpen('suggest')} className="hidden sm:inline-flex">
-              Sugerir
-            </Button>
-            <Button variant="outline" size="sm" icon={CalendarPlus} onClick={() => setSheetOpen('service')} className="hidden sm:inline-flex">
-              Culto
-            </Button>
-          </div>
         </div>
 
         <div className="mt-6">

@@ -10,7 +10,7 @@ import { Card, Chip, EmptyState, SectionTitle } from '@/components/ui/primitives
 import { useDocumentTitle, useServices } from '@/lib/hooks'
 import { allKeys, prettyAccidentals, sameKey } from '@/lib/music/theory'
 import { parseRequest, recommend, type RecommendQuery } from '@/lib/recommend'
-import { useRows } from '@/lib/store'
+import { useIsAdmin, useRows } from '@/lib/store'
 import { MOMENTS, MOMENT_BY_ID, TEMPOS, THEMES, THEME_BY_ID, type Tempo } from '@/lib/taxonomy'
 import { cn, friendlyDate } from '@/lib/utils'
 import type { Song } from '@/types'
@@ -43,6 +43,7 @@ export function AssistantPage() {
   const [showAllThemes, setShowAllThemes] = useState(false)
   const [filtersOpen, setFiltersOpen] = useState(false)
   const [action, setAction] = useState<null | { kind: 'service' | 'suggest'; song: Song; key: string | null }>(null)
+  const isLeader = useIsAdmin()
 
   const results = useMemo(
     () => recommend({ songs, services, favorites }, { ...query, limit: query.count ?? 8 }),
@@ -283,10 +284,12 @@ export function AssistantPage() {
                         </div>
                       )}
                       <div className="mt-3 flex gap-2 pl-8">
-                        <Button size="sm" variant="soft" icon={CalendarPlus} onClick={() => setAction({ kind: 'service', song: r.song, key: r.key })}>
-                          Culto
-                        </Button>
-                        <Button size="sm" variant="outline" icon={Lightbulb} onClick={() => setAction({ kind: 'suggest', song: r.song, key: r.key })}>
+                        {isLeader && (
+                          <Button size="sm" variant="soft" icon={CalendarPlus} onClick={() => setAction({ kind: 'service', song: r.song, key: r.key })}>
+                            Culto
+                          </Button>
+                        )}
+                        <Button size="sm" variant={isLeader ? 'outline' : 'soft'} icon={Lightbulb} onClick={() => setAction({ kind: 'suggest', song: r.song, key: r.key })}>
                           Sugerir
                         </Button>
                         <div className="flex-1" />
@@ -299,7 +302,7 @@ export function AssistantPage() {
             </>
           )}
 
-          {upcoming.length > 0 && (
+          {isLeader && upcoming.length > 0 && (
             <section className="mt-10">
               <SectionTitle title="Montar o setlist inteiro" subtitle="Abertura → louvor → adoração → ministração, com os tons emendando" />
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">

@@ -40,6 +40,8 @@ export interface Backend {
   /** Endereço temporário para tocar/baixar o arquivo. */
   fileUrl(path: string): Promise<string>
   removeFile(path: string): Promise<void>
+  /** Função do banco (Postgres RPC). Sem banco, lança erro. */
+  rpc<T>(fn: string, args: Record<string, unknown>): Promise<T>
   /** Chama uma função do servidor (Supabase Edge Function). Sem servidor, lança erro. */
   invoke<T>(fn: string, body: Record<string, unknown>): Promise<T>
 }

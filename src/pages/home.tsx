@@ -2,12 +2,14 @@ import { useMemo } from 'react'
 import { Link } from 'react-router'
 import { ArrowRight, CalendarPlus, ChevronRight, MessageCircle, Play, Plus, Sparkles, ThumbsUp } from 'lucide-react'
 import { Avatar, AvatarStack } from '@/components/avatar'
+import { ForYouPanel } from '@/components/for-you'
 import { HeaderAvatar, Page } from '@/components/layout'
 import { SongCard, SongCover, SongRow, ThemeTile } from '@/components/song-bits'
 import { LinkButton } from '@/components/ui/button'
 import { Card, SectionTitle } from '@/components/ui/primitives'
 import { toggleFavorite } from '@/lib/actions'
 import { useFavoriteIds, useNextService, useSongs, useTeam, useUnreadCount } from '@/lib/hooks'
+import { EVENT_KIND_BY_ID, eventKind } from '@/lib/events'
 import { MOMENTS, THEMES, ink, soft, solid } from '@/lib/taxonomy'
 import { useMe, useRows, useTable } from '@/lib/store'
 import { cn, compact, dayOfMonth, firstName, greeting, monthShort, plural, relativeDays, timeAgo, weekdayName } from '@/lib/utils'
@@ -41,9 +43,9 @@ function NextServiceCard({ service }: { service: Service }) {
               </div>
             </div>
             <div>
-              <div className="text-[12.5px] font-bold tracking-wide text-ink-2 uppercase">Próximo culto</div>
+              <div className="text-[12.5px] font-bold tracking-wide text-ink-2 uppercase">Próximo evento</div>
               <div className="text-[13.5px] font-semibold text-ink-2">
-                {weekdayName(service.date)}
+                {EVENT_KIND_BY_ID[eventKind(service)].name} · {weekdayName(service.date)}
                 {service.time && ` · ${service.time}`}
               </div>
             </div>
@@ -236,8 +238,11 @@ export function HomePage() {
       <header className="flex items-start justify-between gap-4 pt-[max(20px,env(safe-area-inset-top))] pb-6 lg:pt-10">
         <div>
           <div className="mb-1 text-[13px] font-semibold text-muted">{today}</div>
-          <h1 className="text-[28px] leading-tight font-extrabold tracking-tight text-ink sm:text-[32px]">
-            {greeting()}, {me ? firstName(me.name) : ''} <span className="inline-block origin-bottom-right animate-[pulse-soft_2s_ease-in-out_1]">👋</span>
+          <h1 className="text-[25px] leading-tight font-extrabold tracking-tight text-ink sm:text-[32px]">
+            {greeting()},{' '}
+            <span className="whitespace-nowrap">
+              {me ? firstName(me.name) : ''} <span className="ml-0.5 inline-block origin-bottom-right animate-[pulse-soft_2s_ease-in-out_1]">👋</span>
+            </span>
           </h1>
           <p className="mt-1 text-[14.5px] text-muted">{team?.church || team?.name || 'Ministério de louvor'}</p>
         </div>
@@ -246,6 +251,8 @@ export function HomePage() {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-10">
         <div className="min-w-0 space-y-8">
+          <ForYouPanel />
+
           {next ? (
             <NextServiceCard service={next} />
           ) : (
@@ -254,11 +261,11 @@ export function HomePage() {
                 <CalendarPlus className="size-5" />
               </span>
               <div>
-                <h2 className="text-[18px] font-bold">Nenhum culto agendado</h2>
-                <p className="text-[14px] text-muted">Crie o próximo culto e monte o setlist com a equipe.</p>
+                <h2 className="text-[18px] font-bold">Nenhum evento agendado</h2>
+                <p className="text-[14px] text-muted">Agende o próximo culto, festa ou congresso na Programação.</p>
               </div>
               <LinkButton to="/cultos/novo" icon={Plus}>
-                Agendar culto
+                Agendar evento
               </LinkButton>
             </Card>
           )}
@@ -287,7 +294,7 @@ export function HomePage() {
                 title="Explorar por tema"
                 action={
                   <Link to="/acervo" className="text-[13px] font-bold text-primary">
-                    Acervo completo
+                    Todas as músicas
                   </Link>
                 }
               />
@@ -324,7 +331,7 @@ export function HomePage() {
 
           <section>
             <SectionTitle
-              title="Chegaram no acervo"
+              title="Músicas novas"
               action={
                 <Link to="/musica/nova" className="flex items-center gap-1 text-[13px] font-bold text-primary">
                   <Plus className="size-4" /> Nova

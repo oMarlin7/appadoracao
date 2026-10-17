@@ -26,7 +26,9 @@ import { cn } from '@/lib/utils'
 import { usePlayer } from '@/lib/player'
 import { Avatar } from './avatar'
 import { Logo } from './logo'
+import { InboxBell } from './for-you'
 import { AudioDock } from './media'
+import { useVotingAutomation } from './voting'
 
 interface NavItem {
   to: string
@@ -40,8 +42,8 @@ function useNavItems(): NavItem[] {
   const unread = useUnreadCount()
   return [
     { to: '/', label: 'Início', icon: House, end: true },
-    { to: '/acervo', label: 'Acervo', icon: Library },
-    { to: '/cultos', label: 'Cultos', icon: CalendarDays },
+    { to: '/acervo', label: 'Músicas', icon: Library },
+    { to: '/cultos', label: 'Programação', icon: CalendarDays },
     { to: '/playlists', label: 'Playlists', icon: ListMusic },
     { to: '/chat', label: 'Chat', icon: MessageCircle, badge: unread },
   ]
@@ -79,9 +81,12 @@ function Sidebar() {
 
   return (
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-[264px] flex-col border-r border-line bg-surface/70 px-4 pt-6 pb-4 backdrop-blur-xl lg:flex">
-      <Link to="/" className="mb-7 px-2">
-        <Logo subtitle={team?.name ?? 'Ministério de Louvor'} />
-      </Link>
+      <div className="mb-7 flex items-start justify-between gap-2 px-2">
+        <Link to="/">
+          <Logo subtitle={team?.name ?? 'Ministério de Louvor'} />
+        </Link>
+        <InboxBell className="-mr-2" />
+      </div>
       <nav className="space-y-1">
         {items.map((it) => (
           <NavLink key={it.to} to={it.to} end={it.end} className={linkCls}>
@@ -212,8 +217,9 @@ export function AppLayout() {
   const matches = useMatches()
   const hideNav = matches.some((m) => (m.handle as { hideNav?: boolean } | undefined)?.hideNav)
   const hasDock = usePlayer((s) => !!s.track)
+  useVotingAutomation()
   return (
-    <div className="min-h-dvh">
+    <div className="min-h-dvh bg-bg text-ink">
       <ScrollRestoration />
       <Sidebar />
       <OfflinePill />
@@ -237,14 +243,17 @@ export function Page({ children, className, wide }: { children: ReactNode; class
   return <div className={cn('mx-auto w-full px-4 sm:px-6 lg:px-10', wide ? 'max-w-6xl' : 'max-w-5xl', className)}>{children}</div>
 }
 
-/** Avatar no canto do cabeçalho (só no celular) — leva ao perfil. */
+/** Sino de avisos + avatar no canto do cabeçalho (só no celular; o avatar leva ao perfil). */
 export function HeaderAvatar() {
   const me = useMe()
   if (!me) return null
   return (
-    <Link to="/perfil" aria-label="Meu perfil" className="lg:hidden">
-      <Avatar profile={me} size="md" />
-    </Link>
+    <div className="flex items-center gap-1.5 lg:hidden">
+      <InboxBell />
+      <Link to="/perfil" aria-label="Meu perfil">
+        <Avatar profile={me} size="md" />
+      </Link>
+    </div>
   )
 }
 

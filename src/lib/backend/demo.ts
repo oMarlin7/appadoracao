@@ -17,7 +17,7 @@ const SESSION_KEY = 'adoracao:demo:user'
 const ACCOUNTS_KEY = 'adoracao:demo:accounts'
 const FILE_PREFIX = 'adoracao:demo:file:'
 /** Tabelas que chegaram depois da primeira versão: quem já usava o demo recebe os exemplos delas. */
-const ADDED_LATER: TableName[] = ['attendance', 'recordings', 'custom_themes']
+const ADDED_LATER: TableName[] = ['attendance', 'recordings', 'custom_themes', 'song_polls', 'votes', 'announcements']
 
 type Accounts = Record<string, { password: string; profileId: string }>
 
@@ -55,7 +55,16 @@ export function createDemoBackend(): DemoBackend {
       const source = stored ?? seed
       for (const t of TABLES) Object.assign(snapshot[t], source[t] ?? {})
       const upgraded = !!stored && ADDED_LATER.some((t) => !stored[t])
-      if (upgraded) for (const t of ADDED_LATER) if (!stored![t]) Object.assign(snapshot[t], seed[t])
+      if (upgraded) {
+        // Atualização do app: entram os exemplos novos (sem mexer no que já existe).
+        for (const t of TABLES) {
+          const table = snapshot[t] as Record<string, Row>
+          for (const [id, row] of Object.entries(seed[t] as Record<string, Row>)) {
+            if (!(id in table)) table[id] = row
+            else if (t === 'team_settings' || t === 'services') table[id] = { ...row, ...table[id] } as Row
+          }
+        }
+      }
       db = snapshot
       if (!stored || upgraded) persist()
       return snapshot
@@ -227,6 +236,10 @@ export function createDemoBackend(): DemoBackend {
       const url = fileUrls.get(path)
       if (url) URL.revokeObjectURL(url)
       fileUrls.delete(path)
+    },
+
+    async rpc() {
+      throw new AppError('Disponível com o Supabase configurado.', 'no-server')
     },
 
     async invoke() {

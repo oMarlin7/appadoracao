@@ -99,7 +99,8 @@ function SuggestionCard({ suggestion: s }: { suggestion: Suggestion }) {
   const service = s.serviceId ? services[s.serviceId] : undefined
   const votes = reactions.filter((r) => r.targetType === 'suggestion' && r.targetId === s.id)
   const voted = votes.some((v) => v.userId === me?.id)
-  const canManage = me?.role === 'admin' || (service && (service.leaderId === me?.id || service.createdBy === me?.id))
+  // Aceitar/recusar (e levar para o setlist) é só do líder.
+  const canManage = me?.role === 'admin'
   return (
     <Card className="p-3.5">
       <div className="flex items-start gap-3">

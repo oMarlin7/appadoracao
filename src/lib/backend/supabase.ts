@@ -29,7 +29,9 @@ const missingColumn = (e: { code?: string; message?: string }) => {
   if (e.code !== 'PGRST204' && !/column .* does not exist|could not find the '.*' column/i.test(e.message ?? '')) return null
   return /'([a-z_]+)' column|column "?([a-z_]+)"? /i.exec(e.message ?? '')?.slice(1).find(Boolean) ?? null
 }
-const UPGRADE_HINT = 'O banco precisa da atualização v2: rode o arquivo supabase/migrations/…_v2_midia_presenca.sql no SQL Editor (veja o README).'
+/** Tabelas das migrações v2/v3: sem elas o app segue funcionando, só sem as funções novas. */
+const OPTIONAL_TABLES: TableName[] = ['attendance', 'recordings', 'custom_themes', 'song_polls', 'votes', 'announcements']
+const UPGRADE_HINT = 'O banco precisa ser atualizado: rode no SQL Editor os arquivos de supabase/migrations que ainda não rodou (veja o README).'
 
 function translateError(e: unknown): Error {
   if (isNetworkError(e)) return new AppError('Sem conexão com a internet.', 'network')
@@ -44,6 +46,7 @@ function translateError(e: unknown): Error {
     [/rate limit|too many/i, 'Muitas tentativas seguidas. Aguarde um pouco e tente de novo.'],
     [/row-level security|permission denied/i, 'Você não tem permissão para fazer isso.'],
     [/jwt expired/i, 'Sua sessão expirou. Entre novamente.'],
+    [/somente o líder|já usou todos os seus votos|votação ainda não terminou|não tem votação/i, msg.replace(/^.*?(Somente|Você|A votação|Este evento)/, '$1')],
   ]
   for (const [re, text] of rules) if (re.test(msg)) return new AppError(text)
   return new AppError(msg || 'Algo deu errado. Tente novamente.')
@@ -71,7 +74,7 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
       return data ?? []
     }
     // Banco ainda sem a migração v2: o app segue funcionando sem as funções novas.
-    const optional = table === 'attendance' || table === 'recordings' || table === 'custom_themes'
+    const optional = (OPTIONAL_TABLES as string[]).includes(table)
     const all: Record<string, unknown>[] = []
     for (let from = 0; ; from += PAGE) {
       const { data, error } = await sb
@@ -256,6 +259,13 @@ export function createSupabaseBackend(url: string, anonKey: string): Backend {
       const sb = await clientP
       const { error } = await sb.storage.from(BUCKET).remove([path])
       if (error && !isNetworkError(error)) console.warn('Arquivo não removido do Storage', path, error)
+    },
+
+    async rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
+      const sb = await clientP
+      const { data, error } = await sb.rpc(fn, args)
+      if (error) throw isNetworkError(error) ? error : translateError(error)
+      return data as T
     },
 
     async invoke<T>(fn: string, body: Record<string, unknown>): Promise<T> {

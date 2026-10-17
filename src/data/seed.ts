@@ -1,5 +1,6 @@
 import { addDays, toLocalDateString } from '@/lib/utils'
-import { TABLES, type Attendance, type CustomTheme, type DataSnapshot, type Favorite, type Message, type Playlist, type Profile, type Reaction, type Recording, type Service, type Song, type SongPref, type Suggestion } from '@/types'
+import { TABLES, type Announcement, type Attendance, type CustomTheme, type DataSnapshot, type Favorite, type Message, type Playlist, type Profile, type Reaction, type Recording, type Service, type SongPoll, type Vote, type Song, type SongPref, type Suggestion } from '@/types'
+import { zonedTime } from '@/lib/voting'
 import { buildSeedSongs } from './songs'
 
 /**
@@ -48,6 +49,9 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     name: 'Ministério de Louvor',
     church: 'Igreja Comunidade da Graça',
     inviteCode: 'LOUVOR2026',
+    selectionMode: 'votacao',
+    votingPicks: 2,
+    timezone: 'America/Sao_Paulo',
     updatedAt: created,
   }
 
@@ -89,6 +93,7 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     {
       id: 'svc-ensaio',
       title: 'Ensaio',
+      kind: 'ensaio',
       date: date(-1),
       time: '16:00',
       theme: 'Ensaio do repertório de domingo',
@@ -114,9 +119,9 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
       time: '19:00',
       theme: 'Fazei isto em memória de mim',
       bibleText: '1 Coríntios 11:23-26',
-      notes: '',
+      notes: 'As músicas da ministração saem da votação da equipe.',
       leaderId: 'demo-julia',
-      items: [item('hino-santo-santo-santo', 'abertura'), item('ex-no-calvario', 'ceia')],
+      items: [item('hino-santo-santo-santo', 'abertura')],
       team: [
         { userId: 'demo-julia', role: 'ministro' },
         { userId: 'demo-lucas', role: 'violao' },
@@ -185,6 +190,45 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
       updatedAt: iso(addDays(now, -15)),
     },
   ]
+  // Outros tipos de evento na programação
+  services.push(
+    {
+      id: 'svc-congresso',
+      title: 'Congresso de Jovens',
+      kind: 'congresso',
+      date: date(20),
+      time: '19:30',
+      theme: 'Geração que adora',
+      bibleText: 'Salmos 145:4',
+      notes: 'Três noites. Repertório mais animado.',
+      leaderId: 'demo-julia',
+      items: [],
+      team: [
+        { userId: 'demo-julia', role: 'ministro' },
+        { userId: 'demo-pedro', role: 'guitarra' },
+        { userId: 'demo-gabriel', role: 'bateria' },
+      ],
+      createdBy: 'demo-ana',
+      createdAt: iso(addDays(now, -1)),
+      updatedAt: iso(addDays(now, -1)),
+    },
+    {
+      id: 'svc-confra',
+      title: 'Confraternização da equipe',
+      kind: 'confraternizacao',
+      date: date(13),
+      time: '12:00',
+      theme: 'Almoço na casa da Ana',
+      bibleText: '',
+      notes: 'Cada um leva um prato 🍲',
+      leaderId: 'demo-ana',
+      items: [],
+      team: [],
+      createdBy: 'demo-ana',
+      createdAt: iso(addDays(now, -5)),
+      updatedAt: iso(addDays(now, -5)),
+    },
+  )
   for (const s of services) out.services[s.id] = s
 
   // ---- Sugestões e apoios ---------------------------------------------------
@@ -343,6 +387,76 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     rec('rec-3', 'Passagem de som · Santo És Tu', 'E-B-C#m-A', 68, 'svc-passado-3', 'ex-santo-es-tu', 'demo-ana', 15),
   ]
   for (const r of recordings) if (!r.songId || out.songs[r.songId]) out.recordings[r.id] = r
+
+  // ---- Votação aberta para a Santa Ceia ------------------------------------------------------
+  // Prazo personalizado (aberta "agora" em qualquer dia em que o demo for aberto).
+  const poll: SongPoll = {
+    id: 'svc-ceia',
+    mode: 'votacao',
+    picks: 2,
+    // Abriu ontem às 12h e fecha daqui a dois dias às 12h (horário de Brasília).
+    opensAt: iso(zonedTime(toLocalDateString(addDays(now, -1)), 12, 0)),
+    closesAt: iso(zonedTime(toLocalDateString(addDays(now, 2)), 12, 0)),
+    appliedAt: null,
+    createdBy: 'demo-ana',
+    createdAt: iso(addDays(now, -2)),
+    updatedAt: iso(addDays(now, -2)),
+  }
+  out.song_polls[poll.id] = poll
+  const ceiaSuggestions: Array<[string, string, string, string, number]> = [
+    ['sug-5', 'ex-no-calvario', 'demo-julia', 'Para o momento do pão e do cálice.', -30],
+    ['sug-6', 'hino-santo-santo-santo', 'demo-mariana', 'Um hino para abrir com reverência.', -26],
+    ['sug-7', 'ex-amor-de-pai', 'demo-beatriz', '', -20],
+  ]
+  for (const [id, songId, userId, note, hours] of ceiaSuggestions) {
+    if (!out.songs[songId]) continue
+    const when = iso(new Date(now.getTime() + hours * 3600_000))
+    out.suggestions[id] = { id, songId, serviceId: 'svc-ceia', userId, note, status: 'pendente', createdAt: when, updatedAt: when }
+  }
+  const ballots: Array<[string, string[]]> = [
+    ['demo-lucas', ['ex-graca-sem-fim', 'ex-no-calvario']],
+    ['demo-julia', ['ex-no-calvario', 'ex-amor-de-pai']],
+    ['demo-mariana', ['hino-santo-santo-santo', 'ex-no-calvario']],
+    ['demo-gabriel', ['ex-graca-sem-fim']],
+    ['demo-beatriz', ['ex-amor-de-pai', 'ex-graca-sem-fim']],
+  ]
+  for (const [userId, songIds] of ballots)
+    for (const songId of songIds) {
+      if (!out.songs[songId]) continue
+      const v: Vote = { id: `svc-ceia:${userId}:${songId}`, serviceId: 'svc-ceia', userId, songId, createdAt: iso(new Date(now.getTime() - 5 * 3600_000)) }
+      out.votes[v.id] = v
+    }
+
+  // ---- Avisos do líder ---------------------------------------------------------------------
+  const announcements: Announcement[] = [
+    {
+      id: 'aviso-ensaio',
+      title: 'Ensaio geral na quinta, 20h',
+      body: 'Vamos passar o repertório da Santa Ceia. Quem puder chegar 19h45 ajuda a montar o som 🙏',
+      icon: 'megaphone',
+      color: 'butter',
+      audience: [],
+      pinned: true,
+      endsOn: toLocalDateString(addDays(now, 6)),
+      createdBy: 'demo-ana',
+      createdAt: iso(addDays(now, -1)),
+      updatedAt: iso(addDays(now, -1)),
+    },
+    {
+      id: 'aviso-vozes',
+      title: 'Vozes: aquecimento às 18h no domingo',
+      body: 'Vamos aquecer juntos na sala 3 antes da passagem de som.',
+      icon: 'mic',
+      color: 'rose',
+      audience: ['role:vocal', 'role:backvocal', 'role:ministro'],
+      pinned: false,
+      endsOn: toLocalDateString(addDays(now, 2)),
+      createdBy: 'demo-ana',
+      createdAt: iso(addDays(now, -1)),
+      updatedAt: iso(addDays(now, -1)),
+    },
+  ]
+  for (const a of announcements) out.announcements[a.id] = a
 
   // ---- Tema criado pela equipe --------------------------------------------------------------
   const youth: CustomTheme = {

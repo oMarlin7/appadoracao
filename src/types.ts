@@ -88,9 +88,18 @@ export interface Assignment {
   role: string
 }
 
+/**
+ * Tipo de evento da programação. Apresentações (culto, festa, congresso, especial) são onde
+ * a equipe ministra o que ensaiou; ensaio, reunião e confraternização não contam como
+ * "próximo evento" nem abrem votação de músicas.
+ */
+export type EventKind = 'culto' | 'festa' | 'congresso' | 'especial' | 'ensaio' | 'reuniao' | 'confraternizacao'
+
 export interface Service {
   id: Id
   title: string
+  /** Antigos (sem tipo) são tratados como culto, ou ensaio pelo título. */
+  kind?: EventKind
   /** AAAA-MM-DD (data local, sem fuso) */
   date: string
   /** HH:mm */
@@ -195,6 +204,58 @@ export interface TeamSettings {
   name: string
   church: string
   inviteCode: string | null
+  /** Como as músicas dos cultos são escolhidas: o líder escolhe ou votação semanal. */
+  selectionMode?: 'lider' | 'votacao'
+  /** Quantas músicas saem da votação (normalmente 2, às vezes 3). */
+  votingPicks?: number
+  /** Fuso dos horários da votação (quinta 12h → sábado 12h). */
+  timezone?: string
+  updatedAt: string
+}
+
+/**
+ * Votação de músicas de um evento (id = id do evento). Sem esta linha, vale a regra da equipe:
+ * abre na quinta 12h e fecha no sábado 12h antes do ensaio da semana do evento.
+ */
+export interface SongPoll {
+  id: Id
+  /** 'lider' = o líder escolheu direto para este evento (sem votação). */
+  mode: 'votacao' | 'lider'
+  picks: number | null
+  /** Datas personalizadas (null = regra semanal). */
+  opensAt: string | null
+  closesAt: string | null
+  /** Quando as músicas vencedoras entraram no setlist. */
+  appliedAt: string | null
+  createdBy: Id | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface Vote {
+  /** `${serviceId}:${userId}:${songId}` */
+  id: Id
+  serviceId: Id
+  userId: Id
+  songId: Id
+  createdAt: string
+}
+
+/** Aviso do líder no painel "Para você". Público vazio = equipe toda. */
+export interface Announcement {
+  id: Id
+  title: string
+  body: string
+  /** Chave de ANNOUNCEMENT_ICONS */
+  icon: string
+  color: Pastel
+  /** 'user:<id>' ou 'role:<função>'; vazio = todos. */
+  audience: string[]
+  pinned: boolean
+  /** AAAA-MM-DD; depois desse dia o aviso some. */
+  endsOn: string | null
+  createdBy: Id | null
+  createdAt: string
   updatedAt: string
 }
 
@@ -212,6 +273,9 @@ export interface Tables {
   attendance: Attendance
   recordings: Recording
   custom_themes: CustomTheme
+  song_polls: SongPoll
+  votes: Vote
+  announcements: Announcement
 }
 
 export type TableName = keyof Tables
@@ -231,6 +295,9 @@ export const TABLES: TableName[] = [
   'attendance',
   'recordings',
   'custom_themes',
+  'song_polls',
+  'votes',
+  'announcements',
 ]
 
 export type DataSnapshot = { [K in TableName]: Record<Id, Tables[K]> }
