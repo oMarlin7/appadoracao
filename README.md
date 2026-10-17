@@ -85,21 +85,21 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 
 ### 1. Criar o banco no Supabase
 1. Crie uma conta em supabase.com → **New project** (região *South America (São Paulo)*).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) e, por último, com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist).
-3. Em **Project Settings → API**, copie a **Project URL** e a chave **anon public**.
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) e, por último, com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase).
+3. Em **Project Settings → API Keys**, copie a **Project URL** e a chave **publishable** (`sb_publishable_…`). Ela é pública: pode ir para o navegador sem problema, quem protege os dados são as regras do banco. (A chave *anon* antiga também funciona, mas o Supabase vai desligá-la no fim de 2026.)
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
 5. Opcional: em **Authentication → Sign In / Providers → Email**, desligue *Confirm email* se não quiser que cada membro confirme o e-mail antes de entrar (o código de convite já protege o cadastro).
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
 
-> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql` e/ou `…_v3_votacao_avisos.sql`). Até lá o app continua funcionando, mas sem as funções novas.
+> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql` e/ou `…_v4_seguranca.sql`). Até lá o app continua funcionando, mas sem as funções novas.
 
 ### 2. Publicar o app
 **Vercel**: *Add New → Project* → importe este repositório → em *Environment Variables* adicione:
 
 ```
 VITE_SUPABASE_URL=https://SEU-PROJETO.supabase.co
-VITE_SUPABASE_ANON_KEY=sua-chave-anon-publica
+VITE_SUPABASE_ANON_KEY=sb_publishable_...
 ```
 
 → **Deploy**. (Na Netlify é igual: o arquivo `netlify.toml` já está pronto.)
@@ -114,7 +114,7 @@ Com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
 ```bash
 supabase login
 supabase link --project-ref SEU-PROJETO
-supabase functions deploy importar-musica
+supabase functions deploy importar-musica --no-verify-jwt   # a própria função confere o login
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   # opcional: liga a análise com IA
 ```
 
@@ -193,7 +193,7 @@ src/
   pages/           telas
   components/      componentes visuais (cifra, capas, sheets, layout…)
   data/            acervo inicial e equipe de demonstração
-supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2 e v3)
+supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2, v3 e v4)
 supabase/functions/   função importar-musica (dados dos links e análise com IA)
 ```
 

@@ -5,8 +5,11 @@
 //   { action: 'analisar', ... }   → temas, momentos, significado, referências e ritmo a partir
 //                                    da letra que o membro colou (precisa de ANTHROPIC_API_KEY)
 //
-// Publicar:  supabase functions deploy importar-musica
+// Publicar:  supabase functions deploy importar-musica --no-verify-jwt
 // Chave IA:  supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   (opcional)
+//
+// O app usa a chave publicável (sb_publishable_…), que o verify_jwt da plataforma não
+// entende; por isso a função confere o login de quem chama ela mesma (signedIn, abaixo).
 //
 // Letra e cifra têm direitos autorais: esta função não baixa nem escreve letras — só lê os
 // dados públicos do link e analisa o texto que a própria equipe colou.
@@ -21,6 +24,24 @@ const CORS = {
 
 const json = (body: unknown, status = 200) =>
   new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } })
+
+// Só membros logados: o Auth do próprio projeto confirma a sessão enviada pelo app.
+async function signedIn(req: Request): Promise<boolean> {
+  const token = /^Bearer\s+(.+)$/i.exec(req.headers.get('Authorization') ?? '')?.[1]
+  const url = Deno.env.get('SUPABASE_URL')
+  if (!token || !url || token.startsWith('sb_')) return false
+  let apikey = Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+  try {
+    apikey = JSON.parse(Deno.env.get('SUPABASE_PUBLISHABLE_KEYS') ?? '{}').default ?? apikey
+  } catch {
+    /* fica com a chave antiga */
+  }
+  const res = await fetch(`${url}/auth/v1/user`, {
+    headers: { apikey, Authorization: `Bearer ${token}` },
+    signal: AbortSignal.timeout(5000),
+  })
+  return res.ok
+}
 
 // ---------------------------------------------------------------------------
 // Dados do link
@@ -182,6 +203,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'método não permitido' }, 405)
   try {
+    if (!(await signedIn(req))) return json({ error: 'entre na sua conta' }, 401)
     const body = await req.json()
     if (body.action === 'metadata') {
       const url = String(body.url ?? '')
