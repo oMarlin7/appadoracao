@@ -88,7 +88,7 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) e, por último, com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase).
 3. Em **Project Settings → API Keys**, copie a **Project URL** e a chave **publishable** (`sb_publishable_…`). Ela é pública: pode ir para o navegador sem problema, quem protege os dados são as regras do banco. (A chave *anon* antiga também funciona, mas o Supabase vai desligá-la no fim de 2026.)
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
-5. Opcional: em **Authentication → Sign In / Providers → Email**, desligue *Confirm email* se não quiser que cada membro confirme o e-mail antes de entrar (o código de convite já protege o cadastro).
+5. Em **Authentication → Sign In / Providers → Email**, desligue *Confirm email*. Sem um servidor de e-mail próprio (SMTP), o Supabase só entrega e-mails para quem é da organização no painel do Supabase, então a confirmação não chegaria aos membros. O código de convite continua protegendo o cadastro. Se um dia quiser confirmação de e-mail e "esqueci minha senha" funcionando para todos, configure um SMTP (ex.: [Resend](https://resend.com/docs/send-with-supabase-smtp), que tem plano gratuito) em **Authentication → Emails → SMTP Settings**.
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
 
@@ -104,7 +104,9 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_...
 
 → **Deploy**. (Na Netlify é igual: o arquivo `netlify.toml` já está pronto.)
 
-Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env.local` e preencha as mesmas variáveis.
+> Este repositório já traz em [`.env.production`](.env.production) o endereço e a chave pública do banco da nossa equipe, então na Vercel basta importar e clicar em **Deploy**. Para usar outro projeto do Supabase, troque os valores nesse arquivo ou defina as variáveis no painel (elas têm prioridade).
+
+Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env.local` e preencha as mesmas variáveis. (`npm run dev` continua em modo demonstração sem o `.env.local`; `npm run build` usa o `.env.production`.)
 
 ### Opcional: dados completos dos links e IA para a ficha da música
 Sem isto, a importação já funciona (o navegador busca título e capa direto no YouTube/Spotify quando possível). Com a função do servidor, o Spotify também traz o **artista** e a **duração**, e — com uma chave da API do Claude — o app escreve o **significado**, sugere **referências bíblicas** e refina **temas e momentos** a partir da letra colada.
