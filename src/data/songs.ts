@@ -3,7 +3,7 @@ import type { Tempo } from '@/lib/taxonomy'
 import type { Song } from '@/types'
 
 /**
- * Acervo inicial
+ * Músicas iniciais
  * --------------
  * • Canções de exemplo: composições originais escritas para este app (livres para usar),
  *   que mostram cifra, letra, transposição e organização por tema/momento.

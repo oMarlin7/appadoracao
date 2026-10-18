@@ -93,7 +93,7 @@ export function KeyPickerSheet({
   const capoTip = suggestCapo(value)
 
   return (
-    <Sheet open={open} onClose={onClose} title="Tom da música" description="Escolha o tom e a cifra inteira é transposta na hora.">
+    <Sheet open={open} onClose={onClose} title="Tom da música">
       <div className="mb-4 flex items-center justify-between gap-3 rounded-3xl bg-surface-2 p-2">
         <Button variant="outline" size="md" icon={Minus} onClick={() => step(-1)} className="bg-surface">
           ½ tom

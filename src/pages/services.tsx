@@ -187,7 +187,7 @@ export function ServicesPage() {
           icon={CalendarDays}
           color="butter"
           title={tab === 'proximos' ? 'Nada agendado' : 'Nenhum evento anterior'}
-          description={tab === 'proximos' ? 'Agende o próximo culto, evento, ensaio ou reunião da equipe.' : 'Os eventos realizados ficam guardados aqui como histórico.'}
+          
           action={
             tab === 'proximos' && (
               <LinkButton to="/cultos/novo" icon={Plus}>
@@ -319,7 +319,6 @@ function ItemSheet({ service, item, onClose }: { service: Service; item: Setlist
       open={!!item}
       onClose={onClose}
       title={song.title}
-      description="Tom, momento e observações só para este culto."
       footer={
         <div className="flex gap-2">
           <Button
@@ -390,7 +389,6 @@ function TeamSheet({ service, open, onClose }: { service: Service; open: boolean
       open={open}
       onClose={onClose}
       title="Escala do culto"
-      description="Toque nas funções de cada pessoa neste culto."
       tall
       footer={
         <Button
@@ -450,7 +448,7 @@ function AutoSetlistSheet({ service, open, onClose }: { service: Service; open: 
       open={open}
       onClose={onClose}
       title="Montar setlist com o assistente"
-      description={service.theme ? `Fluxo completo pensado para “${service.theme}”, emendando os tons.` : 'Fluxo completo de abertura a ministração, emendando os tons.'}
+      description={service.theme ? `Para “${service.theme}”` : undefined}
       tall
       footer={
         <div className="flex gap-2">
@@ -521,7 +519,6 @@ function ServiceRecordings({ service }: { service: Service }) {
     <section className="mt-8">
       <SectionTitle
         title="Gravações"
-        subtitle={recordings.length ? 'Para estudar em casa — o áudio continua tocando enquanto você navega.' : undefined}
         action={
           <Button variant="ghost" size="sm" icon={Mic} onClick={() => setOpen(true)}>
             Gravar / enviar
@@ -560,7 +557,7 @@ function ServiceSuggestions({ service, canManage }: { service: Service; canManag
   if (!list.length || votingActive(votingInfo(service, team, poll), hasVotes)) return null
   return (
     <section className="mt-8">
-      <SectionTitle title="Sugestões para este evento" subtitle="Apoie as que você curtiu. O líder decide o que entra." />
+      <SectionTitle title="Sugestões para este evento" />
       <div className="space-y-2.5">
         {list.map((s) => {
           const song = songs[s.songId]
@@ -787,18 +784,13 @@ function ServiceView({ service }: { service: Service }) {
         <section className="mt-8">
           <SectionTitle
             title="Setlist"
-            subtitle={visible.length ? `${plural(visible.length, 'música', 'músicas')}${isLeader ? ' · arraste para reordenar' : ' · escolhidas pelo líder'}` : undefined}
+            subtitle={visible.length ? plural(visible.length, 'música', 'músicas') : undefined}
           />
           {visible.length === 0 ? (
             <Card className="p-2">
               <EmptyState
                 icon={Music}
                 title="Setlist vazio"
-                description={
-                  isLeader
-                    ? 'Adicione músicas ou deixe o assistente montar um fluxo completo para a mensagem.'
-                    : 'O líder ainda vai escolher as músicas. Sugira as suas — elas podem entrar na votação.'
-                }
                 action={
                   isLeader ? (
                     <Button icon={Sparkles} onClick={() => setSheet('auto')}>

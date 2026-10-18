@@ -12,6 +12,8 @@ import type { Id, Service, SetlistItem, Song, SongPoll, Suggestion, TeamSettings
  */
 
 export const DEFAULT_TIMEZONE = 'America/Sao_Paulo'
+/** Quantas músicas a votação pode escolher (o mesmo limite do banco). */
+export const MAX_VOTING_PICKS = 20
 
 function tzOffsetMinutes(at: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {

@@ -2,30 +2,24 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useBlocker, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import {
-  Check,
   ChevronDown,
   ClipboardPaste,
-  ExternalLink,
   Eye,
-  Headphones,
+  FileText,
   ImagePlus,
-  Link2,
   ListPlus,
   Loader2,
   Minus,
   PencilLine,
   Plus,
-  RefreshCw,
   Save,
   Search,
   Sparkles,
   Trash2,
   Wand2,
-  X,
 } from 'lucide-react'
 import { ChordSheet } from '@/components/chord-sheet'
 import { Page, TopBar } from '@/components/layout'
-import { MediaEmbed, TapTempo } from '@/components/media'
 import { SongCover } from '@/components/song-bits'
 import { ThemeEditorSheet } from '@/components/theme-editor'
 import { Button } from '@/components/ui/button'
@@ -34,11 +28,13 @@ import { Sheet, confirm } from '@/components/ui/sheet'
 import { newSong, saveSong } from '@/lib/actions'
 import { useDocumentTitle, useThemes } from '@/lib/hooks'
 import { pickFile, squareImageDataUrl } from '@/lib/images'
-import { chordSearchUrl, extractMediaLinks, parseMediaUrl, youtubeSearchUrl, type MediaLink } from '@/lib/media'
+import { SmartImport } from '@/components/smart-import'
+import { chordSearchUrl, extractMediaLinks, parseMediaUrl, youtubeThumb, type MediaLink } from '@/lib/media'
 import { detectKeyFromText, tempoFromBpm } from '@/lib/music/analyze'
 import { docLyrics, parseSheet, transposeText } from '@/lib/music/sheet'
 import { allKeys, makeSpeller, normalizeKeyName, prettyAccidentals, transposeKey } from '@/lib/music/theory'
 import { analyzeImport, analyzeLocally, analyzeWithAI, aiAvailable, draftMeaning, fetchLinkMetadata, type ImportAnalysis, type LinkMetadata, type SongAnalysis } from '@/lib/song-import'
+import type { SongCandidate, SongDetails } from '@/lib/song-search'
 import { useRow, useSettings } from '@/lib/store'
 import { MOMENTS, TEMPOS, THEME_BY_ID, groupThemes, suggestMoments, suggestThemes } from '@/lib/taxonomy'
 import { cn, plural } from '@/lib/utils'
@@ -127,11 +123,16 @@ export function SongEditorPage() {
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
+  const [autoPaste, setAutoPaste] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [themeSheet, setThemeSheet] = useState(false)
   const [allThemes, setAllThemes] = useState(false)
   const [view, setView] = useState<'editar' | 'previa'>('editar')
   const [analysis, setAnalysis] = useState<{ state: 'idle' | 'running' | 'done'; source?: SongAnalysis['source'] }>({ state: 'idle' })
+  const [smart, setSmart] = useState(isNew)
+  const titleRef = useRef<HTMLInputElement>(null)
+  /** Referências preenchidas automaticamente (o campo é texto, fora do objeto da música). */
+  const autoRefs = useRef('')
   const fontScale = useSettings((s) => s.fontScale)
   const sheetRef = useRef<HTMLDivElement>(null)
   /** Valores preenchidos automaticamente: podem ser substituídos por uma análise melhor. */
@@ -205,6 +206,62 @@ export function SongEditorPage() {
     } else setAnalysis({ state: 'done', source: 'local' })
   }
 
+  /** Ficha completa da busca pelo nome (sem IA: sugestões pelo título e o BPM do catálogo). */
+  const applyDetails = (d: SongDetails | null, c: SongCandidate) => {
+    if (!d?.ia) {
+      if (d?.bpm) applyAuto({ bpm: d.bpm })
+      void runAnalysis({ title: c.title, artist: c.artist, content: '', bpm: d?.bpm ?? null, tempo: null }, false)
+      return
+    }
+    const yt = parseMediaUrl(d.youtubeUrl)
+    applyAuto(
+      compactPatch({
+        youtubeUrl: d.youtubeUrl,
+        spotifyUrl: d.spotifyUrl,
+        coverUrl: c.coverUrl ?? (yt?.provider === 'youtube' ? youtubeThumb(yt.id) : null),
+        originalKey: d.originalKey,
+        bpm: d.bpm,
+        timeSignature: d.timeSignature,
+        tempo: d.tempo ?? tempoFromBpm(d.bpm),
+        themes: d.themes,
+        moments: d.moments,
+        meaning: d.meaning,
+        notes: d.arrangementNotes,
+      }),
+    )
+    if (d.bibleRefs.length)
+      setRefsText((cur) => {
+        if (cur.trim() && cur !== autoRefs.current) return cur
+        autoRefs.current = d.bibleRefs.join('; ')
+        return autoRefs.current
+      })
+    setAnalysis({ state: 'done', source: 'ia' })
+  }
+
+  /** "Escolher outra música": desfaz só o que foi preenchido automaticamente. */
+  const clearAuto = () => {
+    const blank = newSong()
+    setSong((s) => {
+      const next = { ...s }
+      for (const [k, v] of Object.entries(auto.current) as Array<[keyof Song, unknown]>) {
+        const current = s[k]
+        const same = Array.isArray(current) ? sameList(current as string[], v as string[]) : current === v
+        if (same) (next as unknown as Record<string, unknown>)[k] = blank[k]
+      }
+      return next
+    })
+    auto.current = {}
+    setRefsText((cur) => (cur === autoRefs.current ? '' : cur))
+    autoRefs.current = ''
+    setAnalysis({ state: 'idle' })
+  }
+
+  /** Abre o campo de colar já com o que estiver copiado (quando o aparelho deixa ler). */
+  const pasteCifra = () => {
+    setAutoPaste(true)
+    setImportOpen(true)
+  }
+
   const applyCifra = (r: ImportAnalysis) => {
     const next = {
       title: song.title || r.title || '',
@@ -225,7 +282,8 @@ export function SongEditorPage() {
     setDirty(true)
     setImportOpen(false)
     toast.success('Cifra organizada', { description: compactJoin([r.key && `Tom ${r.key} (${r.keySource === 'texto' ? 'informado' : 'detectado'})`, `${r.chordCount} acordes`]) })
-    void runAnalysis(next)
+    // A ficha da pesquisa (IA) vale mais que a sugestão pela letra.
+    if (analysis.source !== 'ia') void runAnalysis(next)
   }
 
   const save = async () => {
@@ -243,7 +301,7 @@ export function SongEditorPage() {
     const ok = await saveSong(final)
     if (ok) {
       setDirty(false)
-      toast.success(isNew ? 'Música adicionada ao acervo 🎶' : 'Alterações salvas')
+      toast.success(isNew ? 'Música adicionada 🎶' : 'Alterações salvas')
       setTimeout(() => navigate(`/musica/${final.id}`, { replace: true }), 0)
     } else setSaving(false)
   }
@@ -270,7 +328,7 @@ export function SongEditorPage() {
   if (id && !existing)
     return (
       <>
-        <TopBar backTo="/acervo" />
+        <TopBar backTo="/musicas" />
         <Page>
           <p className="py-16 text-center text-muted">Música não encontrada.</p>
         </Page>
@@ -291,46 +349,51 @@ export function SongEditorPage() {
         }
       />
       <Page className="max-w-6xl pt-5 pb-28">
-        {isNew && (
-          <QuickImport
-            song={song}
-            analysis={analysis}
-            onMetadata={(link, meta) => {
-              setSong((s) => ({
-                ...s,
-                title: s.title || meta.title,
-                artist: s.artist || meta.artist,
-                coverUrl: s.coverUrl || meta.coverUrl,
-                youtubeUrl: link.provider === 'youtube' ? link.url : s.youtubeUrl,
-                spotifyUrl: link.provider === 'spotify' ? link.url : s.spotifyUrl,
-              }))
-              setDirty(true)
-              if (!song.content && meta.title) void runAnalysis({ title: meta.title, artist: meta.artist, content: '', bpm: song.bpm, tempo: song.tempo })
-            }}
-            onClearLink={() => {
-              setSong((s) => ({ ...s, youtubeUrl: null, spotifyUrl: null, coverUrl: s.coverUrl?.startsWith('data:') ? s.coverUrl : null }))
-            }}
-            onPasteCifra={async () => {
-              try {
-                const text = await navigator.clipboard.readText()
-                const r = text.trim() ? analyzeImport(text) : null
-                if (r && r.chordCount + r.lyrics.length > 0) return applyCifra(r)
-              } catch {
-                /* sem permissão para ler a área de transferência: abre o campo para colar */
+        {isNew &&
+          (smart ? (
+            <SmartImport
+              song={song}
+              themes={themes}
+              onPick={(c) => applyAuto(compactPatch({ title: c.title, artist: c.artist, coverUrl: c.coverUrl }))}
+              onDetails={applyDetails}
+              onLink={(link, meta) =>
+                applyAuto(
+                  compactPatch({
+                    title: meta.title,
+                    artist: meta.artist,
+                    coverUrl: meta.coverUrl,
+                    youtubeUrl: link.provider === 'youtube' ? link.url : null,
+                    spotifyUrl: link.provider === 'spotify' ? link.url : null,
+                  }),
+                )
               }
-              setImportOpen(true)
-            }}
-            onOpenPaste={() => setImportOpen(true)}
-            onShowSheet={() => sheetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
-            onBpm={(bpm) => {
-              setSong((s) => ({ ...s, bpm, tempo: !s.tempo || s.tempo === auto.current.tempo ? tempoFromBpm(bpm) : s.tempo }))
-              auto.current.tempo = tempoFromBpm(bpm)
-              setDirty(true)
-            }}
-            onAnalyze={() => void runAnalysis({ title: song.title, artist: song.artist, content: song.content, bpm: song.bpm, tempo: song.tempo })}
-            onBatch={() => setBatchOpen(true)}
-          />
-        )}
+              onReset={clearAuto}
+              onPasteCifra={() => void pasteCifra()}
+              onOpenPaste={() => {
+                setAutoPaste(false)
+                setImportOpen(true)
+              }}
+              onShowSheet={() => sheetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+              onManual={() => {
+                setSmart(false)
+                setTimeout(() => titleRef.current?.focus(), 50)
+              }}
+              onBatch={() => setBatchOpen(true)}
+              onBpm={(bpm) => {
+                setSong((s) => ({ ...s, bpm, tempo: !s.tempo || s.tempo === auto.current.tempo ? tempoFromBpm(bpm) : s.tempo }))
+                auto.current.tempo = tempoFromBpm(bpm)
+                setDirty(true)
+              }}
+            />
+          ) : (
+            <button
+              type="button"
+              onClick={() => setSmart(true)}
+              className="mb-5 flex w-full items-center gap-3 rounded-3xl border border-dashed border-primary/40 bg-primary-soft/50 px-5 py-4 text-left text-[15px] font-bold text-primary"
+            >
+              <Search className="size-5" /> Buscar a música pelo nome
+            </button>
+          ))}
 
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <div className="min-w-0 space-y-5">
@@ -339,7 +402,6 @@ export function SongEditorPage() {
                 <SongCover song={song} size={84} />
                 <div className="min-w-0 flex-1">
                   <div className="text-[13px] font-semibold text-ink-2">Capa</div>
-                  <p className="text-[12.5px] text-muted">{song.coverUrl ? 'Aparece no acervo, nos cultos e no player.' : 'Sem capa: o app cria uma arte pelas cores do tema.'}</p>
                   <div className="mt-2 flex flex-wrap gap-1.5">
                     <Button variant="outline" size="sm" icon={ImagePlus} onClick={() => void chooseCover()}>
                       {song.coverUrl ? 'Trocar' : 'Escolher foto'}
@@ -353,7 +415,7 @@ export function SongEditorPage() {
                   </div>
                 </div>
               </div>
-              <Field label="Título">{(fid) => <Input id={fid} value={song.title} onChange={(e) => set('title', e.target.value)} placeholder="Nome da música" autoFocus={!isNew} />}</Field>
+              <Field label="Título">{(fid) => <Input ref={titleRef} id={fid} value={song.title} onChange={(e) => set('title', e.target.value)} placeholder="Nome da música" autoFocus={!isNew} />}</Field>
               <Field label="Artista / ministério">{(fid) => <Input id={fid} value={song.artist} onChange={(e) => set('artist', e.target.value)} placeholder="Quem gravou ou compôs" />}</Field>
               <div className="grid grid-cols-2 gap-3">
                 <Field label="Tom original">
@@ -401,7 +463,6 @@ export function SongEditorPage() {
 
             <Section
               title="Organização"
-              description="É isso que faz a música aparecer na hora certa da busca e do assistente."
               action={
                 analysis.state === 'running' ? (
                   <span className="flex shrink-0 items-center gap-1.5 text-[12.5px] font-bold text-primary">
@@ -508,9 +569,7 @@ export function SongEditorPage() {
                     <button type="button" className="font-bold text-primary" onClick={() => set('meaning', draftMeaning(song.themes, song.moments))}>
                       Rascunho automático
                     </button>
-                  ) : (
-                    'o que a música comunica'
-                  )
+                  ) : undefined
                 }
               >
                 {(fid) => (
@@ -555,7 +614,7 @@ export function SongEditorPage() {
               <Field label="Notas de arranjo" hint="opcional">
                 {(fid) => <Textarea id={fid} rows={3} value={song.notes} onChange={(e) => set('notes', e.target.value)} placeholder="Ex.: Intro só com teclado. Bateria entra no 2º refrão." />}
               </Field>
-              <Field label="Link do YouTube" hint="toca dentro do app">
+              <Field label="Link do YouTube" hint="opcional">
                 {(fid) => <Input id={fid} type="url" inputMode="url" value={song.youtubeUrl ?? ''} onChange={(e) => set('youtubeUrl', e.target.value || null)} placeholder="https://youtube.com/watch?v=…" />}
               </Field>
               <Field label="Link do Spotify" hint="opcional">
@@ -597,9 +656,6 @@ export function SongEditorPage() {
                   <ChordSheet doc={doc} mode="cifra" fontScale={fontScale * 0.92} />
                 </div>
               )}
-              <div className="border-t border-line bg-surface-2/60 px-4 py-2.5 text-[12px] leading-relaxed text-muted">
-                Acordes na linha de cima, letra embaixo. Seções entre colchetes: <b>[Refrão]</b>, <b>[Ponte]</b>. Os botões − e + reescrevem a cifra salva em outro tom.
-              </div>
             </Card>
           </div>
         </div>
@@ -611,12 +667,12 @@ export function SongEditorPage() {
             Cancelar
           </Button>
           <Button icon={Save} loading={saving} onClick={() => void save()} className="min-w-36">
-            {isNew ? 'Adicionar ao acervo' : 'Salvar'}
+            {isNew ? 'Adicionar música' : 'Salvar'}
           </Button>
         </div>
       </div>
 
-      <ImportSheet open={importOpen} onClose={() => setImportOpen(false)} onApply={applyCifra} searchUrl={song.title ? chordSearchUrl(song.title, song.artist) : null} />
+      <ImportSheet open={importOpen} autoPaste={autoPaste} onClose={() => setImportOpen(false)} onApply={applyCifra} searchUrl={song.title ? chordSearchUrl(song.title, song.artist) : null} />
       <ThemeEditorSheet open={themeSheet} onClose={() => setThemeSheet(false)} onSaved={(tid) => set('themes', [...song.themes, tid])} />
       <BatchImportSheet open={batchOpen} onClose={() => setBatchOpen(false)} />
     </>
@@ -625,300 +681,50 @@ export function SongEditorPage() {
 
 const compactJoin = (parts: Array<string | false | null | undefined | 0>) => parts.filter(Boolean).join(' · ')
 
-// ---------------------------------------------------------------------------
-// Importação rápida (o caminho principal para cadastrar)
-// ---------------------------------------------------------------------------
-
-function Step({ n, title, done, children, aside }: { n: number; title: string; done?: boolean; children: ReactNode; aside?: ReactNode }) {
-  return (
-    <div className="flex gap-3">
-      <span
-        className={cn(
-          'mt-0.5 grid size-7 shrink-0 place-items-center rounded-full text-[13px] font-extrabold',
-          done ? 'bg-primary text-primary-ink' : 'bg-surface text-primary ring-1 ring-primary/30',
-        )}
-      >
-        {done ? <Check className="size-4" strokeWidth={3} /> : n}
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <div className="text-[15px] font-bold text-ink">{title}</div>
-          {aside}
-        </div>
-        <div className="mt-2">{children}</div>
-      </div>
-    </div>
-  )
-}
-
-function QuickImport({
-  song,
-  analysis,
-  onMetadata,
-  onClearLink,
-  onPasteCifra,
-  onOpenPaste,
-  onShowSheet,
-  onBpm,
-  onAnalyze,
-  onBatch,
-}: {
-  song: Song
-  analysis: { state: 'idle' | 'running' | 'done'; source?: SongAnalysis['source'] }
-  onMetadata: (link: MediaLink, meta: LinkMetadata) => void
-  onClearLink: () => void
-  onPasteCifra: () => void
-  onOpenPaste: () => void
-  onShowSheet: () => void
-  onBpm: (bpm: number) => void
-  onAnalyze: () => void
-  onBatch: () => void
-}) {
-  const [text, setText] = useState('')
-  const [status, setStatus] = useState<'idle' | 'loading' | 'ok' | 'partial' | 'invalid'>('idle')
-  const [link, setLink] = useState<MediaLink | null>(null)
-  const [listen, setListen] = useState(false)
-  const lastFetched = useRef('')
-
-  const load = async (value: string, typing = false) => {
-    setText(value)
-    const l = parseMediaUrl(value)
-    if (!value.trim()) return setStatus('idle')
-    // Enquanto digita, só avisa que o link é inválido ao sair do campo.
-    if (!l) return setStatus(typing ? 'idle' : 'invalid')
-    const key = `${l.provider}:${l.id}`
-    if (key === lastFetched.current) return
-    lastFetched.current = key
-    setLink(l)
-    setStatus('loading')
-    const meta = await fetchLinkMetadata(l)
-    if (lastFetched.current !== key) return
-    onMetadata(l, meta)
-    setStatus(meta.title ? 'ok' : 'partial')
-  }
-
-  const doc = useMemo(() => parseSheet(song.content), [song.content])
-  const sections = doc.sections.filter((s) => s.label).length
-  const hasCifra = !!song.content.trim()
-  const key = song.originalKey ?? detectKeyFromText(song.content)
-  const media = link ?? parseMediaUrl(song.youtubeUrl) ?? parseMediaUrl(song.spotifyUrl)
-
-  return (
-    <Card className="mb-5 overflow-hidden border-primary/25">
-      <div className="relative overflow-hidden bg-primary-soft px-5 pt-5 pb-4">
-        <div className="absolute -top-16 -right-10 size-48 rounded-full bg-[var(--orchid-solid)] opacity-25 blur-3xl" />
-        <div className="relative flex items-start gap-3">
-          <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-primary text-primary-ink shadow-float">
-            <Wand2 className="size-5" />
-          </span>
-          <div className="min-w-0">
-            <h2 className="text-[17px] font-extrabold text-ink">Importação rápida</h2>
-            <p className="text-[13px] text-ink-2">Cole o link da música: título, artista, capa e player vêm na hora. Depois cole a cifra e o app calcula tom, temas, momentos e significado.</p>
-          </div>
-        </div>
-      </div>
-
-      <div className="space-y-5 p-5">
-        <Step n={1} title="Link do YouTube ou Spotify" done={status === 'ok' || status === 'partial'}>
-          {status === 'ok' || status === 'partial' ? (
-            <div className="flex items-center gap-3 rounded-2xl bg-surface-2 p-2.5">
-              <SongCover song={song} size={52} />
-              <div className="min-w-0 flex-1">
-                <div className="truncate text-[15px] font-bold text-ink">{song.title || 'Título não encontrado'}</div>
-                <div className="truncate text-[12.5px] text-muted">
-                  {media?.provider === 'spotify' ? 'Spotify' : 'YouTube'} · {song.artist || (status === 'partial' ? 'preencha o artista abaixo' : 'artista não identificado')}
-                </div>
-              </div>
-              <Button variant={listen ? 'primary' : 'soft'} size="sm" icon={Headphones} onClick={() => setListen((v) => !v)}>
-                Ouvir
-              </Button>
-              <button
-                type="button"
-                aria-label="Trocar link"
-                onClick={() => {
-                  setText('')
-                  setLink(null)
-                  setStatus('idle')
-                  setListen(false)
-                  lastFetched.current = ''
-                  onClearLink()
-                }}
-                className="grid size-8 shrink-0 place-items-center rounded-full text-muted hover:bg-surface"
-              >
-                <X className="size-4" />
-              </button>
-            </div>
-          ) : (
-            <div className="flex gap-2">
-              <div className="relative min-w-0 flex-1">
-                <Link2 className="pointer-events-none absolute top-1/2 left-4 size-[18px] -translate-y-1/2 text-muted" />
-                <Input
-                  value={text}
-                  inputMode="url"
-                  onChange={(e) => void load(e.target.value, true)}
-                  onBlur={(e) => e.target.value.trim() && !parseMediaUrl(e.target.value) && setStatus('invalid')}
-                  placeholder="Cole o link do vídeo ou da faixa"
-                  className="pl-11"
-                  aria-label="Link do YouTube ou Spotify"
-                />
-                {status === 'loading' && <Loader2 className="absolute top-1/2 right-4 size-[18px] -translate-y-1/2 animate-spin text-primary" />}
-              </div>
-              <Button
-                variant="outline"
-                icon={ClipboardPaste}
-                className="h-12 shrink-0"
-                onClick={async () => {
-                  try {
-                    void load(await navigator.clipboard.readText())
-                  } catch {
-                    toast('Cole o link no campo', { description: 'Segure o dedo no campo e escolha “Colar”.' })
-                  }
-                }}
-              >
-                Colar
-              </Button>
-            </div>
-          )}
-          {status === 'invalid' && <p className="mt-1.5 text-[12.5px] font-semibold text-rose-ink">Não reconhecemos esse link. Use um link de vídeo do YouTube ou de faixa do Spotify.</p>}
-          {status === 'partial' && <p className="mt-1.5 text-[12.5px] text-muted">Não conseguimos ler os dados do link agora — a capa e o player funcionam; complete título e artista abaixo.</p>}
-          {status === 'idle' && (
-            <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-[12.5px]">
-              {song.title && (
-                <a href={youtubeSearchUrl(song.title, song.artist)} target="_blank" rel="noreferrer" className="inline-flex items-center gap-1 font-bold text-primary">
-                  <Search className="size-3.5" /> Procurar no YouTube
-                </a>
-              )}
-              <button type="button" onClick={onBatch} className="inline-flex items-center gap-1 font-bold text-primary">
-                <ListPlus className="size-3.5" /> Vários links de uma vez
-              </button>
-            </div>
-          )}
-          {listen && media && <MediaEmbed link={media} cover={song.coverUrl} title={song.title} className="mt-3" autoLoad />}
-        </Step>
-
-        <Step
-          n={2}
-          title="Cifra e letra"
-          done={hasCifra}
-          aside={
-            hasCifra ? (
-              <button type="button" onClick={onShowSheet} className="text-[12.5px] font-bold text-primary">
-                Ver / editar
-              </button>
-            ) : undefined
-          }
-        >
-          {hasCifra ? (
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-2">
-              {key && (
-                <span>
-                  Tom <b className="text-ink">{prettyAccidentals(key)}</b>
-                </span>
-              )}
-              <span>{plural(sections, 'seção', 'seções')}</span>
-              <button type="button" onClick={onOpenPaste} className="font-bold text-primary">
-                Colar outra
-              </button>
-            </div>
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                <a
-                  href={song.title ? chordSearchUrl(song.title, song.artist) : undefined}
-                  target="_blank"
-                  rel="noreferrer"
-                  aria-disabled={!song.title}
-                  className={cn(
-                    'inline-flex h-11 items-center justify-center gap-2 rounded-full border border-line bg-surface px-4 text-[14px] font-semibold text-ink hover:bg-surface-2',
-                    !song.title && 'pointer-events-none opacity-50',
-                  )}
-                >
-                  <Search className="size-[18px]" /> Procurar a cifra <ExternalLink className="size-3.5 text-muted" />
-                </a>
-                <Button icon={ClipboardPaste} onClick={onPasteCifra}>
-                  Colar cifra copiada
-                </Button>
-              </div>
-              <p className="mt-2 text-[12px] leading-relaxed text-muted">
-                Letras e cifras têm direitos autorais, então o app não as baixa sozinho: abra a cifra (Cifra Club, PDF, WhatsApp), copie tudo e toque em “Colar” — o app separa acordes,
-                letra e seções e descobre o tom.
-              </p>
-            </>
-          )}
-        </Step>
-
-        <Step n={3} title="BPM" done={!!song.bpm} aside={song.bpm ? <span className="text-[13px] font-extrabold text-ink tabular-nums">{song.bpm} BPM</span> : undefined}>
-          <TapTempo onBpm={onBpm} />
-          {media && !listen && (
-            <button type="button" onClick={() => setListen(true)} className="mt-2 inline-flex items-center gap-1 text-[12.5px] font-bold text-primary">
-              <Headphones className="size-3.5" /> Abrir o player para tocar junto
-            </button>
-          )}
-        </Step>
-
-        <Step
-          n={4}
-          title="Ficha da música"
-          done={analysis.state === 'done' && song.themes.length > 0}
-          aside={
-            analysis.state === 'running' ? (
-              <span className="flex items-center gap-1.5 text-[12.5px] font-bold text-primary">
-                <Loader2 className="size-3.5 animate-spin" /> Analisando…
-              </span>
-            ) : (
-              <button type="button" onClick={onAnalyze} disabled={!song.title && !hasCifra} className="flex items-center gap-1 text-[12.5px] font-bold text-primary disabled:opacity-40">
-                <RefreshCw className="size-3.5" /> {analysis.state === 'done' ? 'Refazer' : 'Analisar'}
-              </button>
-            )
-          }
-        >
-          {song.themes.length || song.moments.length ? (
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-1.5">
-                {song.themes.map((t) => {
-                  const th = THEME_BY_ID[t]
-                  return th ? (
-                    <span key={t} className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-semibold" style={{ background: `var(--${th.color}-bg)`, color: `var(--${th.color}-ink)` }}>
-                      <th.icon className="size-3" /> {th.short ?? th.name}
-                    </span>
-                  ) : null
-                })}
-                {song.moments.map((m) => (
-                  <span key={m} className="rounded-full bg-surface-2 px-2.5 py-0.5 text-[12px] font-semibold text-ink-2">
-                    {MOMENTS.find((x) => x.id === m)?.short ?? MOMENTS.find((x) => x.id === m)?.name}
-                  </span>
-                ))}
-              </div>
-              {song.meaning && <p className="line-clamp-3 text-[13px] leading-relaxed text-ink-2">{song.meaning}</p>}
-              <p className="text-[12px] text-muted">
-                {analysis.source === 'ia' ? 'Sugerido pela IA a partir da letra colada.' : 'Sugerido pela letra e pelo título.'} Ajuste abaixo antes de salvar.
-              </p>
-            </div>
-          ) : (
-            <p className="text-[13px] text-muted">Temas, momentos do culto, ritmo e significado são preenchidos sozinhos depois do link e da cifra.</p>
-          )}
-        </Step>
-      </div>
-    </Card>
-  )
+/** Só os valores preenchidos (o que veio vazio não apaga nada). */
+function compactPatch(patch: Partial<Song>): Partial<Song> {
+  return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0))) as Partial<Song>
 }
 
 // ---------------------------------------------------------------------------
 // Colar cifra
 // ---------------------------------------------------------------------------
 
-function ImportSheet({ open, onClose, onApply, searchUrl }: { open: boolean; onClose: () => void; onApply: (r: ImportAnalysis) => void; searchUrl: string | null }) {
+function ImportSheet({
+  open,
+  autoPaste,
+  onClose,
+  onApply,
+  searchUrl,
+}: {
+  open: boolean
+  autoPaste?: boolean
+  onClose: () => void
+  onApply: (r: ImportAnalysis) => void
+  searchUrl: string | null
+}) {
   const [text, setText] = useState('')
   const analysis = useMemo(() => (text.trim() ? analyzeImport(text) : null), [text])
   useEffect(() => {
-    if (open) setText('')
-  }, [open])
+    if (!open) return
+    setText('')
+    if (!autoPaste || !navigator.clipboard?.readText) return
+    // Alguns aparelhos pedem permissão (ou nunca respondem): o campo já está aberto para colar à mão.
+    let alive = true
+    navigator.clipboard
+      .readText()
+      .then((t) => alive && t.trim() && setText((cur) => cur || t))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [open, autoPaste])
   return (
     <Sheet
       open={open}
       onClose={onClose}
       title="Colar cifra"
-      description="Cole a cifra completa — com título e artista no topo, se tiver. Funciona com o formato do Cifra Club e com ChordPro."
+      description="Cole a cifra completa."
       size="lg"
       tall
       footer={
@@ -937,6 +743,16 @@ function ImportSheet({ open, onClose, onApply, searchUrl }: { open: boolean; onC
                 <Search className="size-4" /> Procurar
               </a>
             )}
+            <Button
+              variant="ghost"
+              icon={FileText}
+              onClick={async () => {
+                const file = await pickFile('.txt,.cho,.chopro,.chordpro,.crd,.pro,text/plain')
+                if (file) setText(await file.text())
+              }}
+            >
+              Arquivo
+            </Button>
             <Button
               variant="outline"
               icon={ClipboardPaste}
@@ -1013,7 +829,7 @@ function BatchImportSheet({ open, onClose }: { open: boolean; onClose: () => voi
       open={open}
       onClose={onClose}
       title="Importar vários links"
-      description="Cole vários links do YouTube ou Spotify (um por linha). Cada música entra no acervo com título, artista, capa e player — a cifra você completa depois."
+      description="Um link do YouTube ou do Spotify por linha."
       size="lg"
       footer={
         <Button
@@ -1043,13 +859,13 @@ function BatchImportSheet({ open, onClose }: { open: boolean; onClose: () => voi
             }
             setSaving(false)
             if (ok) {
-              toast.success(`${plural(ok, 'música adicionada', 'músicas adicionadas')} ao acervo`, { description: 'Elas estão com a etiqueta “sem-cifra”: abra cada uma e cole a cifra quando puder.' })
+              toast.success(plural(ok, 'música adicionada', 'músicas adicionadas'), { description: 'Elas ficaram com a etiqueta “sem-cifra”.' })
               onClose()
-              navigate('/acervo?q=sem-cifra')
+              navigate('/musicas?q=sem-cifra')
             }
           }}
         >
-          {chosen.length ? `Adicionar ${plural(chosen.length, 'música', 'músicas')}` : 'Adicionar ao acervo'}
+          {chosen.length ? `Adicionar ${plural(chosen.length, 'música', 'músicas')}` : 'Adicionar'}
         </Button>
       }
     >

@@ -79,7 +79,7 @@ export function RehearsalsPage() {
         <EmptyState
           icon={AudioLines}
           title={q ? 'Nada encontrado' : 'Nenhuma gravação ainda'}
-          description={q ? 'Tente outro nome de música ou culto.' : 'Grave o próximo ensaio pelo celular ou envie um áudio. A equipe ouve aqui no app, inclusive mais devagar para estudar.'}
+          description={q ? 'Tente outro nome de música ou culto.' : undefined}
         />
       ) : (
         <div className="space-y-6">

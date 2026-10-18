@@ -15,16 +15,18 @@ export interface EventKindInfo {
   presentation: boolean
   /** Títulos prontos ao criar o evento. */
   presets: string[]
+  /** Só aparece em eventos antigos (não dá para criar novos). */
+  retired?: boolean
 }
 
 export const EVENT_KINDS: EventKindInfo[] = [
-  { id: 'culto', name: 'Culto', icon: Church, color: 'lavender', presentation: true, presets: ['Culto de Domingo', 'Culto de Celebração', 'Culto de Santa Ceia', 'Culto de Jovens', 'Culto de Oração'] },
+  { id: 'culto', name: 'Culto', icon: Church, color: 'lavender', presentation: true, presets: ['Culto de Domingo', 'Consagração', 'Culto de Santa Ceia', 'Culto de Jovens', 'Culto de Libertação'] },
   { id: 'festa', name: 'Festa', icon: PartyPopper, color: 'butter', presentation: true, presets: ['Festa da Igreja', 'Aniversário da Igreja', 'Festa de Natal'] },
   { id: 'congresso', name: 'Congresso', icon: Tent, color: 'sky', presentation: true, presets: ['Congresso de Jovens', 'Congresso de Mulheres', 'Conferência'] },
   { id: 'especial', name: 'Especial', icon: Star, color: 'orchid', presentation: true, presets: ['Casamento', 'Cantata', 'Batismo', 'Evento especial'] },
   { id: 'ensaio', name: 'Ensaio', icon: AudioLines, color: 'mint', presentation: false, presets: ['Ensaio', 'Ensaio geral', 'Passagem de som'] },
   { id: 'reuniao', name: 'Reunião', icon: MessagesSquare, color: 'sage', presentation: false, presets: ['Reunião do ministério', 'Reunião de oração da equipe'] },
-  { id: 'confraternizacao', name: 'Confraternização', icon: Cake, color: 'peach', presentation: false, presets: ['Confraternização da equipe', 'Café da manhã do ministério'] },
+  { id: 'confraternizacao', name: 'Confraternização', icon: Cake, color: 'peach', presentation: false, presets: ['Confraternização da equipe'], retired: true },
 ]
 
 export const EVENT_KIND_BY_ID = Object.fromEntries(EVENT_KINDS.map((k) => [k.id, k])) as Record<EventKind, EventKindInfo>

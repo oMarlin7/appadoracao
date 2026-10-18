@@ -1,6 +1,6 @@
 # Adoração · app do ministério de louvor
 
-Repertório organizado por **tema, significado e momento do culto**, **importação rápida pelo link do YouTube ou Spotify**, **cifras** que mudam de tom na hora, **letras** para os cantores, **player** e **gravações de ensaio**, **programação** com setlist, escala e presença, **votação das músicas**, painel **“Para você”** com lembretes e avisos personalizados, **sugestões**, **playlists** e **chat** da equipe — num app leve, bonito e que funciona até sem internet.
+Repertório organizado por **tema, significado e momento do culto**, **cadastro pelo nome da música** (o app acha a gravação certa e preenche a ficha), **cifras** que mudam de tom na hora, **letras** para os cantores, **player** e **gravações de ensaio**, **programação** com setlist, escala e presença, **votação das músicas**, painel **“Para você”** com lembretes e avisos personalizados, **sugestões**, **playlists** e **chat** da equipe — num app leve, bonito e que funciona até sem internet.
 
 **No ar:** [appadoracao.vercel.app](https://appadoracao.vercel.app) · cada envio para o ramo principal publica uma nova versão automaticamente.
 
@@ -14,16 +14,16 @@ Repertório organizado por **tema, significado e momento do culto**, **importaç
 - **Escolha rápida por momento**: toque em *Abertura*, *Louvor*, *Adoração*, *Ministração*, *Ceia*, *Ofertas*, *Apelo*… e veja na hora as músicas que funcionam ali.
 - **Assistente de repertório**: entende pedidos como *“3 músicas de gratidão animadas para a abertura”* ou *“algo sobre a cruz para a ceia”*. Explica o porquê de cada sugestão: momento, tema, ritmo, **tom que emenda com a música anterior**, se a equipe já conhece e se foi tocada recentemente.
 - **Setlist automático**: monta abertura → louvor → adoração → ministração a partir do tema da pregação, encadeando os tons.
-- **Acervo organizado** por 35 temas em grupos (Quem Deus é, Obra de Cristo, Nossa resposta, Vida com Deus, Espírito & Igreja, Datas) — de *Adoração* e *Cruz & Sangue* a temas bem específicos como *Fidelidade de Deus*, *Nome de Jesus*, *Arrependimento*, *Refúgio & Proteção*, *Família*, *Volta de Jesus* e *Recomeço* — mais os **temas criados pela própria equipe** (com cor, ícone e palavras que o app reconhece nas letras). Também 11 momentos do culto, ritmo, tom, etiquetas, significado e referências bíblicas. Busca sem acento por título, artista, **trecho da letra** ou referência (“sl 23” acha Salmos 23).
+- **Músicas organizadas** por 35 temas em grupos (Quem Deus é, Obra de Cristo, Nossa resposta, Vida com Deus, Espírito & Igreja, Datas) — de *Adoração* e *Cruz & Sangue* a temas bem específicos como *Fidelidade de Deus*, *Nome de Jesus*, *Arrependimento*, *Refúgio & Proteção*, *Família*, *Volta de Jesus* e *Recomeço* — mais os **temas criados pela própria equipe** (com cor, ícone e palavras que o app reconhece nas letras). Também 11 momentos do culto, ritmo, tom, etiquetas, significado e referências bíblicas. Busca sem acento por título, artista, **trecho da letra** ou referência (“sl 23” acha Salmos 23).
 
-**Importação rápida (o jeito principal de cadastrar)**
-1. **Cole o link do YouTube ou do Spotify**: título, artista, **capa** e o **player** vêm na hora.
-2. **Cole a cifra** copiada (o app tem um botão que já procura a cifra pelo nome): ele separa acordes, letra e seções e **descobre o tom**.
-3. **BPM no toque**: dê play no vídeo dentro do app e toque no ritmo.
-4. **Ficha automática**: temas, momentos do culto, ritmo e um rascunho do significado. Com a função de IA ligada (opcional, veja abaixo), o app escreve o significado, sugere referências bíblicas e refina temas e momentos a partir da letra colada.
-- **Vários links de uma vez**: cole uma lista de links e o acervo ganha várias músicas com capa e player (marcadas como *sem-cifra* para completar depois).
+**Cadastro pelo nome (o jeito principal de cadastrar)**
+1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem as gravações do catálogo do Deezer com capa, álbum, versão (*Ao Vivo*, *Playback*…) e duração.
+2. **Toque na gravação certa** (dá para ouvir 30 segundos e trocar, se não for ela) e o app monta a ficha sozinho, passo a passo na tela: **vídeo oficial** no YouTube, faixa no **Spotify**, capa, **tom original, BPM e compasso**, ritmo, **temas e momentos do culto**, **significado**, **referências bíblicas** e **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina) — com as fontes consultadas.
+3. **Cifra e letra**: o app já encontra a página da cifra. Abra, copie e toque em **Colar cifra** (ou envie um arquivo **ChordPro/TXT**): ele separa acordes, letra e seções e confere o tom.
+4. Confira e salve. Tudo continua editável, e o **BPM no toque** fica à mão para ajustar o andamento.
+- Também dá para **colar um link** do YouTube/Spotify, cadastrar **vários links de uma vez** (marcadas como *sem-cifra* para completar depois) ou **preencher à mão**.
 
-> Letras e cifras têm direitos autorais e **não** vêm do YouTube/Spotify — por isso o app não as baixa nem as inventa: a equipe cola a cifra que já usa e o app organiza e analisa o resto.
+> Letras e cifras têm direitos autorais e nenhum serviço as oferece com licença para um app como este — por isso o app não as baixa nem as inventa: ele acha a página da cifra e a equipe cola o texto. Quem tem licença CCLI pode baixar as cifras do SongSelect em ChordPro e enviar pelo botão **Arquivo**.
 
 **Cifras e letras**
 - Transposição instantânea com a grafia correta (B♭ em Fá, A♯ em Mi; diminutos de passagem com ♯).
@@ -45,16 +45,17 @@ Repertório organizado por **tema, significado e momento do culto**, **importaç
 
 **Votação das músicas (como a enquete do WhatsApp, só que organizada)**
 - O líder escolhe em **Equipe → Escolha das músicas**: *Líder escolhe* ou *Votação semanal*.
-- Na votação semanal, **toda quinta às 12h** abre a votação do culto e ela **fecha no sábado às 12h**, a tempo do ensaio da quinta seguinte (para o culto do domingo depois do ensaio). Cada membro vota em até **2 músicas** (ou 3, se o líder preferir) entre as **sugestões** da equipe.
-- Ao fechar, as mais votadas **entram sozinhas no setlist** (empate: vale a sugestão mais antiga). O líder pode abrir antes, encerrar na hora, mudar para 3 músicas ou escolher direto num evento específico.
+- Na votação semanal, **toda quinta às 12h** abre a votação do culto e ela **fecha no sábado às 12h**, a tempo do ensaio da quinta seguinte (para o culto do domingo depois do ensaio). Cada membro vota entre as **sugestões** da equipe, em até tantas músicas quantas o líder definir (de 1 a 20).
+- Ao fechar, as mais votadas **entram sozinhas no setlist** (empate: vale a sugestão mais antiga). O líder pode abrir antes, **encerrar na hora** (as vencedoras vão direto para o setlist), mudar a quantidade de músicas ou escolher direto num evento específico.
 
 **Para você — o painel de cada membro**
 - No topo do início (e no 🔔 em qualquer tela), cada pessoa vê lembretes **só seus, chamando pelo nome**: que está na escala (com botão para confirmar presença), o ensaio da semana, a votação aberta (com contagem regressiva), um convite para sugerir música, o resultado da votação, faltas sem justificativa, **parabéns pela frequência alta** ou um carinho quando a frequência cai — com anéis de progresso, capas, avatares e animações.
+- O contador do 🔔 mostra só o que é novo e **zera ao abrir**. Cada um **exclui** as notificações que quiser (uma a uma ou *Limpar tudo*) e pode trazê-las de volta; isso vale em todos os aparelhos da pessoa.
 - O líder vê também as pendências dele (quem não confirmou, quem avisou ausência na escala, setlist vazio, sugestões esperando) e **publica avisos** para a equipe toda, para funções (ex.: só as vozes) ou para pessoas específicas.
 
 **Equipe**
 - Contas individuais com e-mail e senha, liberadas por **código de convite**, com **foto de perfil**.
-- **Programação** com cultos, festas, congressos e eventos especiais (apresentações) e também ensaios, reuniões e confraternizações. O **próximo evento** do início considera só as apresentações.
+- **Programação** com cultos, festas, congressos e eventos especiais (apresentações) e também ensaios e reuniões. O **próximo evento** do início considera só as apresentações.
 - Setlist (arraste para reordenar), observações por música, alerta de saltos de tom e **escala** (quem ministra, canta e toca).
 - **Só o líder coloca músicas no culto.** Os membros usam **Sugerir** (em cada música e em cada evento): a sugestão vai para a votação ou para o líder aceitar.
 - **Favoritas** e **playlists** (só suas ou compartilhadas com a equipe).
@@ -87,14 +88,14 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 
 ### 1. Criar o banco no Supabase
 1. Crie uma conta em supabase.com → **New project** (região *South America (São Paulo)*).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) e, por último, com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase).
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) depois com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase) e, por último, com [`supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql`](supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql) (salvar o próprio perfil, votação com qualquer número de músicas, encerrar na hora e notificações excluídas).
 3. Em **Project Settings → API Keys**, copie a **Project URL** e a chave **publishable** (`sb_publishable_…`). Ela é pública: pode ir para o navegador sem problema, quem protege os dados são as regras do banco. (A chave *anon* antiga também funciona, mas o Supabase vai desligá-la no fim de 2026.)
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
 5. Em **Authentication → Sign In / Providers → Email**, desligue *Confirm email*. Sem um servidor de e-mail próprio (SMTP), o Supabase só entrega e-mails para quem é da organização no painel do Supabase, então a confirmação não chegaria aos membros. O código de convite continua protegendo o cadastro. Se um dia quiser confirmação de e-mail e "esqueci minha senha" funcionando para todos, configure um SMTP (ex.: [Resend](https://resend.com/docs/send-with-supabase-smtp), que tem plano gratuito) em **Authentication → Emails → SMTP Settings**.
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
 
-> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql` e/ou `…_v4_seguranca.sql`). Até lá o app continua funcionando, mas sem as funções novas.
+> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql`, `…_v4_seguranca.sql` e/ou `…_v5_perfil_votacao_avisos.sql`). Até lá o app continua funcionando, mas sem as funções novas.
 
 ### 2. Publicar o app
 **Vercel**: *Add New → Project* → importe este repositório → em *Environment Variables* adicione:
@@ -110,19 +111,24 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_...
 
 Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env.local` e preencha as mesmas variáveis. (`npm run dev` continua em modo demonstração sem o `.env.local`; `npm run build` usa o `.env.production`.)
 
-### Opcional: dados completos dos links e IA para a ficha da música
-Sem isto, a importação já funciona (o navegador busca título e capa direto no YouTube/Spotify quando possível). Com a função do servidor, o Spotify também traz o **artista** e a **duração**, e — com uma chave da API do Claude — o app escreve o **significado**, sugere **referências bíblicas** e refina **temas e momentos** a partir da letra colada.
+### Busca pelo nome e ficha automática (função do servidor + chave da IA)
+A função `importar-musica` faz a busca pelo nome, traz os dados dos links e monta a ficha. Sem a chave da IA, a busca, a capa, o BPM do catálogo e os links já funcionam; **com uma chave da API do Claude**, o app preenche o resto da ficha sozinho (vídeo oficial, Spotify, página da cifra, tom, BPM, compasso, temas, momentos, significado, referências bíblicas e notas de arranjo), pesquisando na web.
 
-Com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
+1. Crie a chave em [console.anthropic.com](https://console.anthropic.com) → *API Keys* (a conta precisa de créditos em *Billing*; dá para definir um limite de gasto mensal em *Limits*).
+2. No painel do Supabase: **Edge Functions → Secrets → Add new secret**, nome `ANTHROPIC_API_KEY`, valor = a chave.
+
+**Custo**: só quando alguém cadastra uma música pelo nome — em geral entre US$ 0,20 e US$ 0,40 por música (a IA e as buscas na web). A busca no catálogo, os links e o resto do app não têm custo.
+
+Para publicar a função num projeto novo, com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
 
 ```bash
 supabase login
 supabase link --project-ref SEU-PROJETO
 supabase functions deploy importar-musica --no-verify-jwt   # a própria função confere o login
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   # opcional: liga a análise com IA
+supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts). Ela só é chamada por membros logados, não baixa letras e usa apenas o texto que a equipe colou.
+A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts). Ela só atende membros logados e nunca baixa nem escreve letras ou cifras. A busca usa o catálogo público do [Deezer](https://developers.deezer.com).
 
 ### 3. Chamar a equipe
 1. **O líder cria a conta primeiro** — o primeiro cadastro vira líder automaticamente.
@@ -132,10 +138,10 @@ A função está em [`supabase/functions/importar-musica`](supabase/functions/im
 
 O líder pode promover outros líderes na tela **Equipe**. Para tirar alguém da equipe, exclua o usuário no painel do Supabase (*Authentication → Users*): o perfil sai junto com as favoritas, playlists e mensagens dessa pessoa (as músicas e cultos que ela cadastrou continuam).
 
-### 4. Montar o acervo
-- **Nova música → cole o link do YouTube/Spotify → Colar cifra copiada → toque o BPM**, confira a ficha e salve. Para começar rápido, use **Vários links de uma vez** e complete as cifras depois (busque por *sem-cifra* no acervo).
+### 4. Cadastrar as músicas
+- **Nova música → digite a música e o artista → toque na gravação certa → Colar cifra**, confira a ficha e salve. Para começar rápido, use **Vários links de uma vez** e complete as cifras depois (busque por *sem-cifra* em Músicas).
 - Quer começar com exemplos? **Ajustes → Adicionar músicas de exemplo** (e depois *Remover músicas de exemplo*).
-- Testou no modo demonstração e quer levar as músicas? No demo, **Ajustes → Exportar acervo**; no app oficial, **Ajustes → Importar acervo**.
+- Testou no modo demonstração e quer levar as músicas? No demo, **Ajustes → Exportar músicas**; no app oficial, **Ajustes → Importar músicas**.
 
 ---
 
@@ -157,7 +163,7 @@ Também funciona: `Refrão:`, `REFRÃO`, `2ª Parte`, observações como `(2x)`,
 
 ---
 
-## Sobre o acervo de exemplo e direitos autorais
+## Sobre as músicas de exemplo e direitos autorais
 
 O app vem com **canções de exemplo originais** (escritas para este projeto, livres para usar) e **dois hinos em domínio público** (*Santo! Santo! Santo!*, de Reginald Heber, tradução de João Gomes da Rocha; e a *Doxologia*, de Thomas Ken, tradução de Sarah P. Kalley). O texto dos hinos segue a tradição dos hinários evangélicos brasileiros — confira com o hinário da sua igreja.
 
@@ -173,7 +179,7 @@ Letras e cifras de músicas protegidas por direitos autorais **não** acompanham
 npm run dev        # servidor de desenvolvimento
 npm run build      # checagem de tipos + build de produção (pasta dist/)
 npm run preview    # serve o build
-npm test           # testes (motor de cifras e acervo inicial)
+npm test           # testes (motor de cifras, votação, busca pelo nome e músicas iniciais)
 npm run typecheck  # só a checagem de tipos
 ```
 
@@ -187,7 +193,8 @@ src/
   lib/actions.ts   todas as ações do app (atualização otimista)
   lib/taxonomy.ts  temas (do app + da equipe), momentos do culto, ritmos, funções e motivos de ausência
   lib/media.ts     links do YouTube/Spotify, player embutido e título do vídeo → música/artista
-  lib/song-import.ts importação rápida: dados do link e análise da letra (local ou IA)
+  lib/song-search.ts cadastro pelo nome: busca no catálogo e ficha completa (IA no servidor)
+  lib/song-import.ts importação por link: dados do link e análise da letra (local ou IA)
   lib/player.ts    player das gravações (continua tocando entre as telas)
   lib/recorder.ts  gravação pelo microfone
   lib/attendance.ts cálculo de presença e frequência
@@ -196,12 +203,12 @@ src/
   lib/inbox.ts     painel "Para você": lembretes e avisos de cada membro
   pages/           telas
   components/      componentes visuais (cifra, capas, sheets, layout…)
-  data/            acervo inicial e equipe de demonstração
-supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2, v3 e v4)
-supabase/functions/   função importar-musica (dados dos links e análise com IA)
+  data/            músicas iniciais e equipe de demonstração
+supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2, v3, v4 e v5)
+supabase/functions/   função importar-musica (busca pelo nome, dados dos links e ficha com IA)
 ```
 
-**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (favoritas, mensagens, playlists, preferências, a própria presença); o acervo e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; **só o líder coloca, tira ou reordena músicas do setlist e aceita sugestões** (o banco recusa de outros membros); cada um vota em até N músicas, só enquanto a votação está aberta, e só em músicas sugeridas; o resultado é aplicado por uma função do banco que confere prazo e votos; avisos direcionados só chegam a quem foi escolhido; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder.
+**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (perfil, favoritas, mensagens, playlists, preferências, notificações excluídas, a própria presença); as músicas e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; **só o líder coloca, tira ou reordena músicas do setlist e aceita sugestões** (o banco recusa de outros membros); cada um vota em até N músicas, só enquanto a votação está aberta, e só em músicas sugeridas; o resultado é aplicado por uma função do banco que confere prazo e votos; avisos direcionados só chegam a quem foi escolhido; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder.
 
 ## Próximos passos sugeridos
 

@@ -10,7 +10,7 @@ import { Sheet } from '@/components/ui/sheet'
 import { attendanceId } from '@/lib/actions'
 import { expectedMembers, isJustified, memberStats, type MemberStats } from '@/lib/attendance'
 import { useDocumentTitle, useServices } from '@/lib/hooks'
-import { useIsAdmin, useMe, useRows, useTable } from '@/lib/store'
+import { useMe, useRows, useTable } from '@/lib/store'
 import { ABSENCE_REASON_BY_ID } from '@/lib/taxonomy'
 import { addDays, cn, firstName, friendlyDate, plural, toLocalDateString, todayString } from '@/lib/utils'
 import type { Id, Profile } from '@/types'
@@ -20,7 +20,6 @@ type Period = '30' | '90' | 'tudo'
 export function AttendancePage() {
   useDocumentTitle('Presença')
   const me = useMe()
-  const isAdmin = useIsAdmin()
   const profiles = useRows('profiles')
   const services = useRows('services')
   const attendance = useRows('attendance')
@@ -101,7 +100,7 @@ export function AttendancePage() {
       )}
 
       <section className="mt-8">
-        <SectionTitle title="Frequência" subtitle="Cultos que já aconteceram (quem estava na escala ou respondeu)" />
+        <SectionTitle title="Frequência" subtitle="Cultos que já aconteceram" />
         <Segmented<Period>
           size="sm"
           value={period}
@@ -114,7 +113,7 @@ export function AttendancePage() {
           ]}
         />
         {rows.every((r) => !r.stats) ? (
-          <EmptyState icon={CalendarCheck} title="Sem registros no período" description="Depois de cada culto, o líder marca quem esteve presente na página do culto." />
+          <EmptyState icon={CalendarCheck} title="Sem registros no período" />
         ) : (
           <Card className="divide-y divide-line">
             {rows.map(({ profile, stats: s }) => (
@@ -146,7 +145,6 @@ export function AttendancePage() {
             ))}
           </Card>
         )}
-        {!isAdmin && <p className="mt-3 text-[12.5px] text-muted">A marcação de presença é feita pelo líder ou por quem ministra o culto.</p>}
       </section>
 
       {recentAbsences.length > 0 && (

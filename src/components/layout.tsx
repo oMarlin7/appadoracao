@@ -42,7 +42,7 @@ function useNavItems(): NavItem[] {
   const unread = useUnreadCount()
   return [
     { to: '/', label: 'Início', icon: House, end: true },
-    { to: '/acervo', label: 'Músicas', icon: Library },
+    { to: '/musicas', label: 'Músicas', icon: Library },
     { to: '/cultos', label: 'Programação', icon: CalendarDays },
     { to: '/playlists', label: 'Playlists', icon: ListMusic },
     { to: '/chat', label: 'Chat', icon: MessageCircle, badge: unread },

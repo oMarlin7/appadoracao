@@ -2,6 +2,7 @@ import { useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { toast } from 'sonner'
 import {
+  CalendarClock,
   AudioLines,
   Camera,
   CalendarCheck,
@@ -35,7 +36,7 @@ import { Avatar } from '@/components/avatar'
 import { HeaderAvatar, Page, PageHeader } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
-import { Card, Chip, Field, Input, SectionTitle, Segmented, Switch, Textarea } from '@/components/ui/primitives'
+import { Card, Chip, Field, Input, SectionTitle, Segmented, Stepper, Switch, Textarea } from '@/components/ui/primitives'
 import { confirm } from '@/components/ui/sheet'
 import { signOut } from '@/lib/auth'
 import { deleteSong, exportLibrary, importLibrary, saveSong, setMemberRole, updateMyProfile, updateTeam } from '@/lib/actions'
@@ -46,6 +47,7 @@ import { getData, useIsAdmin, useMe, useRows, useSettings, type ThemePref } from
 import { PASTELS, ROLES, ROLE_BY_ID } from '@/lib/taxonomy'
 import { pickFile, squareImageDataUrl } from '@/lib/images'
 import { cn, copyText, downloadFile, firstName, plural, todayString } from '@/lib/utils'
+import { MAX_VOTING_PICKS } from '@/lib/voting'
 
 // ---------------------------------------------------------------------------
 // Perfil
@@ -152,7 +154,6 @@ export function ProfilePage() {
                   </Chip>
                 ))}
               </div>
-              <p className="mt-2 text-[12.5px] text-muted">Quem canta abre as músicas na letra; quem toca, na cifra (dá para mudar nos ajustes).</p>
             </div>
             <Field label="Sobre você" hint="opcional">
               {(id) => <Textarea id={id} rows={2} value={bio} onChange={(e) => setBio(e.target.value)} placeholder="Ex.: violão e segunda voz" />}
@@ -186,7 +187,7 @@ export function ProfilePage() {
           { to: '/equipe', icon: Users, label: 'Equipe e convites' },
           { to: '/presenca', icon: CalendarCheck, label: 'Presença e ausências' },
           { to: '/ensaios', icon: AudioLines, label: 'Gravações de ensaio' },
-          { to: '/temas', icon: Tags, label: 'Temas do acervo' },
+          { to: '/temas', icon: Tags, label: 'Temas' },
           { to: '/favoritas', icon: Heart, label: 'Minhas favoritas' },
           { to: '/sugestoes', icon: Lightbulb, label: 'Sugestões' },
         ].map((l) => (
@@ -219,7 +220,6 @@ function SongSelectionCard() {
         <Vote className="mt-0.5 size-5 shrink-0" />
         <div>
           <div className="text-[15px] font-bold">Escolha das músicas dos cultos</div>
-          <p className="mt-0.5 text-[13px] opacity-85">Só o líder coloca músicas no setlist. A equipe sugere — e, se você quiser, vota.</p>
         </div>
       </div>
       <div className="space-y-4 p-5">
@@ -237,26 +237,22 @@ function SongSelectionCard() {
         />
         {mode === 'votacao' ? (
           <>
-            <div className="rounded-2xl bg-surface-2 p-4 text-[13.5px] leading-relaxed text-ink-2">
-              <b className="text-ink">Toda quinta às 12h</b> abre a votação com as sugestões da equipe e <b className="text-ink">fecha no sábado às 12h</b>. As mais votadas entram
-              sozinhas no setlist, a tempo do ensaio da quinta seguinte — para o culto do domingo depois do ensaio. Você pode mudar prazo e quantidade em cada evento ou
-              escolher direto quando quiser.
+            <div className="flex items-center gap-2 rounded-2xl bg-surface-2 px-4 py-3 text-[13.5px] font-semibold text-ink-2">
+              <CalendarClock className="size-4 shrink-0 text-primary" />
+              Abre quinta às 12h · fecha sábado às 12h
             </div>
-            <div>
-              <div className="mb-2 text-[13px] font-semibold text-ink-2">Músicas escolhidas na votação</div>
-              <Segmented
-                value={String(picks)}
-                onChange={(v) => void updateTeam({ votingPicks: Number(v) })}
-                options={[
-                  { value: '2', label: '2 músicas' },
-                  { value: '3', label: '3 músicas' },
-                ]}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="text-[13.5px] font-semibold text-ink-2">Músicas escolhidas</div>
+              <Stepper
+                label="Músicas escolhidas na votação"
+                value={picks}
+                max={MAX_VOTING_PICKS}
+                format={(n) => plural(n, 'música', 'músicas')}
+                onChange={(n) => void updateTeam({ votingPicks: n })}
               />
             </div>
           </>
-        ) : (
-          <p className="text-[13px] text-muted">Os membros sugerem e apoiam; você aceita as sugestões ou monta o setlist direto.</p>
-        )}
+        ) : null}
       </div>
     </Card>
   )
@@ -276,7 +272,7 @@ export function SettingsPage() {
 
   return (
     <Page className="max-w-2xl">
-      <PageHeader title="Ajustes" subtitle="Preferências deste aparelho" actions={<HeaderAvatar />} />
+      <PageHeader title="Ajustes" actions={<HeaderAvatar />} />
 
       <SectionTitle title="Aparência" />
       <Card className="p-5">
@@ -320,7 +316,6 @@ export function SettingsPage() {
               { value: 'flat', label: 'Bemóis ♭' },
             ]}
           />
-          <p className="mt-2 text-[12.5px] text-muted">“Pelo tom” escreve Bb em Fá e A# em Mi, como nas partituras.</p>
         </div>
         <div>
           <div className="mb-2 flex items-center justify-between text-[13px] font-semibold text-ink-2">
@@ -347,27 +342,27 @@ export function SettingsPage() {
         <Switch checked={s.keepAwake} onChange={(v) => s.set('keepAwake', v)} label="Manter a tela ligada" description="Enquanto uma música estiver aberta." />
       </Card>
 
-      <SectionTitle title="Acervo" className="mt-8" subtitle="Backup e músicas de exemplo" />
+      <SectionTitle title="Músicas" className="mt-8" />
       <Card className="divide-y divide-line">
         <button
           type="button"
           className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-surface-2/60"
           onClick={() => {
-            downloadFile(`acervo-adoracao-${todayString()}.json`, exportLibrary())
+            downloadFile(`musicas-adoracao-${todayString()}.json`, exportLibrary())
             toast.success('Backup baixado')
           }}
         >
           <Download className="size-5 text-muted" />
           <span className="flex-1">
-            <span className="block text-[15px] font-semibold text-ink">Exportar acervo</span>
+            <span className="block text-[15px] font-semibold text-ink">Exportar músicas</span>
             <span className="block text-[12.5px] text-muted">Arquivo com todas as músicas e playlists da equipe</span>
           </span>
         </button>
         <button type="button" className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-surface-2/60" onClick={() => fileRef.current?.click()}>
           <Upload className="size-5 text-muted" />
           <span className="flex-1">
-            <span className="block text-[15px] font-semibold text-ink">Importar acervo</span>
-            <span className="block text-[12.5px] text-muted">De um backup (útil para levar as músicas do modo demonstração para o oficial)</span>
+            <span className="block text-[15px] font-semibold text-ink">Importar músicas</span>
+            <span className="block text-[12.5px] text-muted">De um arquivo de backup</span>
           </span>
         </button>
         <input
@@ -392,7 +387,7 @@ export function SettingsPage() {
             type="button"
             className="flex w-full items-center gap-3 px-5 py-4 text-left hover:bg-rose/40"
             onClick={async () => {
-              if (!(await confirm({ title: `Remover ${plural(examples.length, 'música', 'músicas')} de exemplo?`, description: 'As canções de exemplo e os hinos do acervo inicial saem para toda a equipe.', confirmLabel: 'Remover', danger: true })))
+              if (!(await confirm({ title: `Remover ${plural(examples.length, 'música', 'músicas')} de exemplo?`, confirmLabel: 'Remover', danger: true })))
                 return
               for (const x of examples) await deleteSong(x.id)
               toast.success('Músicas de exemplo removidas')
@@ -419,7 +414,7 @@ export function SettingsPage() {
             <Music className="size-5 text-muted" />
             <span className="flex-1">
               <span className="block text-[15px] font-semibold text-ink">Adicionar músicas de exemplo</span>
-              <span className="block text-[12.5px] text-muted">Canções de demonstração e hinos em domínio público</span>
+              <span className="block text-[12.5px] text-muted">Hinos e canções de exemplo</span>
             </span>
           </button>
         )}
@@ -585,9 +580,6 @@ export function TeamPage() {
           </div>
         ))}
       </Card>
-      <p className="mt-4 text-[12.5px] leading-relaxed text-muted">
-        Para remover alguém da equipe, o líder exclui o usuário no painel do Supabase (Authentication → Users). O perfil, as favoritas e as mensagens saem junto; as músicas cadastradas continuam no acervo.
-      </p>
     </Page>
   )
 }

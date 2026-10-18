@@ -39,7 +39,7 @@ export function ThemesPage() {
     <Page className="max-w-4xl">
       <PageHeader
         title="Temas"
-        subtitle={`${plural(themes.length, 'tema', 'temas')} para organizar o acervo — crie os da sua equipe`}
+        subtitle={plural(themes.length, 'tema', 'temas')}
         actions={
           <>
             <Button icon={Plus} onClick={() => setEditing('new')} className="hidden sm:inline-flex">
@@ -92,7 +92,7 @@ export function ThemesPage() {
                                 const n = counts.get(t.id) ?? 0
                                 const ok = await confirm({
                                   title: `Excluir “${t.name}”?`,
-                                  description: n ? `O tema sai de ${plural(n, 'música', 'músicas')}. As músicas continuam no acervo.` : 'Nenhuma música usa este tema.',
+                                  description: n ? `O tema sai de ${plural(n, 'música', 'músicas')}.` : undefined,
                                   confirmLabel: 'Excluir',
                                   danger: true,
                                 })
@@ -126,7 +126,7 @@ function ThemeCard({ theme, count, actions }: { theme: Theme; count: number; act
   return (
     <div className="relative overflow-hidden rounded-3xl" style={{ background: soft(theme.color) }}>
       <div className="absolute -top-10 -right-10 size-28 rounded-full opacity-60 blur-2xl" style={{ background: solid(theme.color) }} />
-      <Link to={`/acervo/tema/${theme.id}`} className="relative flex items-center gap-3 p-4 pr-12">
+      <Link to={`/musicas/tema/${theme.id}`} className="relative flex items-center gap-3 p-4 pr-12">
         <span className="grid size-11 shrink-0 place-items-center rounded-2xl bg-white/60 dark:bg-white/10" style={{ color: ink(theme.color) }}>
           <Icon className="size-[22px]" strokeWidth={2} />
         </span>

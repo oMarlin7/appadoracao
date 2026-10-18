@@ -49,7 +49,6 @@ export function ThemeEditorSheet({
       open={open}
       onClose={onClose}
       title={theme ? 'Editar tema' : 'Novo tema'}
-      description="Temas mais específicos ajudam a achar a música certa: “Família”, “Juventude”, “Ceia de Natal”…"
       footer={
         <Button
           className="w-full"
@@ -127,7 +126,6 @@ export function ThemeEditorSheet({
         <Field label="Palavras da letra" hint="separe por vírgula">
           {(id) => <Input id={id} value={keywords} onChange={(e) => setKeywords(e.target.value)} placeholder="Ex.: família, lar, casa, filhos, gerações" />}
         </Field>
-        <p className="-mt-3 text-[12.5px] text-muted">Quando uma letra tiver essas palavras, o app sugere este tema ao cadastrar a música.</p>
       </div>
     </Sheet>
   )

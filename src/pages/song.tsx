@@ -107,9 +107,9 @@ export function SongPage() {
   if (!song)
     return (
       <>
-        <TopBar backTo="/acervo" />
+        <TopBar backTo="/musicas" />
         <Page>
-          <EmptyState icon={Music} title="Música não encontrada" description="Ela pode ter sido excluída por alguém da equipe." action={<LinkButton to="/acervo">Ir para o acervo</LinkButton>} />
+          <EmptyState icon={Music} title="Música não encontrada" action={<LinkButton to="/musicas">Ver músicas</LinkButton>} />
         </Page>
       </>
     )
@@ -204,13 +204,13 @@ function SongView({ song }: { song: Song }) {
                   onSelect: async () => {
                     const ok = await confirm({
                       title: 'Excluir esta música?',
-                      description: `“${song.title}” sai do acervo de toda a equipe (setlists e playlists perdem a referência).`,
+                      description: `“${song.title}” será apagada para toda a equipe.`,
                       confirmLabel: 'Excluir',
                       danger: true,
                     })
                     if (ok && (await deleteSong(song.id))) {
                       toast.success('Música excluída')
-                      navigate('/acervo')
+                      navigate('/musicas')
                     }
                   },
                 },
@@ -247,7 +247,7 @@ function SongView({ song }: { song: Song }) {
               {song.themes.slice(0, 3).map((t) => {
                 const theme = THEME_BY_ID[t]
                 return theme ? (
-                  <Link key={t} to={`/acervo/tema/${t}`}>
+                  <Link key={t} to={`/musicas/tema/${t}`}>
                     <Tag color={theme.color} icon={theme.icon}>
                       {theme.short ?? theme.name}
                     </Tag>
@@ -452,7 +452,7 @@ function AboutTab({ song }: { song: Song }) {
         <div className="flex flex-wrap gap-1.5">
           {song.themes.map((t) =>
             THEME_BY_ID[t] ? (
-              <Link key={t} to={`/acervo/tema/${t}`}>
+              <Link key={t} to={`/musicas/tema/${t}`}>
                 <Tag color={THEME_BY_ID[t].color} icon={THEME_BY_ID[t].icon}>
                   {THEME_BY_ID[t].name}
                 </Tag>
@@ -461,7 +461,7 @@ function AboutTab({ song }: { song: Song }) {
           )}
           {song.moments.map((m) =>
             MOMENT_BY_ID[m] ? (
-              <Link key={m} to={`/acervo/momento/${m}`}>
+              <Link key={m} to={`/musicas/momento/${m}`}>
                 <MomentPill id={m} className="py-1 text-[12px]" />
               </Link>
             ) : null,
@@ -531,7 +531,7 @@ function AboutTab({ song }: { song: Song }) {
         </div>
         <div className="mt-4 flex items-center gap-2 border-t border-line pt-4 text-[12.5px] text-muted">
           {creator && <Avatar profile={creator} size="xs" />}
-          {creator ? `Cadastrada por ${firstName(creator.name)}` : 'Música do acervo inicial'} · atualizada {timeAgo(song.updatedAt)}
+          {creator ? `Cadastrada por ${firstName(creator.name)}` : 'Música de exemplo'} · atualizada {timeAgo(song.updatedAt)}
         </div>
       </Card>
     </div>

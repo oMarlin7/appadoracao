@@ -92,7 +92,6 @@ function QuickPick() {
     <section>
       <SectionTitle
         title="O que o momento pede?"
-        subtitle="Toque e veja na hora as músicas certas"
         action={
           <Link to="/assistente" className="flex items-center gap-1 text-[13px] font-bold text-primary">
             Assistente <Sparkles className="size-3.5" />
@@ -262,7 +261,7 @@ export function HomePage() {
               </span>
               <div>
                 <h2 className="text-[18px] font-bold">Nenhum evento agendado</h2>
-                <p className="text-[14px] text-muted">Agende o próximo culto, festa ou congresso na Programação.</p>
+                <p className="text-[14px] text-muted">Nenhum evento agendado.</p>
               </div>
               <LinkButton to="/cultos/novo" icon={Plus}>
                 Agendar evento
@@ -293,14 +292,14 @@ export function HomePage() {
               <SectionTitle
                 title="Explorar por tema"
                 action={
-                  <Link to="/acervo" className="text-[13px] font-bold text-primary">
+                  <Link to="/musicas" className="text-[13px] font-bold text-primary">
                     Todas as músicas
                   </Link>
                 }
               />
               <div className="grid grid-cols-2 gap-2.5 sm:grid-cols-3">
                 {topThemes.map((t) => (
-                  <ThemeTile key={t.id} theme={t} count={themeCounts.get(t.id) ?? 0} to={`/acervo/tema/${t.id}`} />
+                  <ThemeTile key={t.id} theme={t} count={themeCounts.get(t.id) ?? 0} to={`/musicas/tema/${t.id}`} />
                 ))}
               </div>
             </section>

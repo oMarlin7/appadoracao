@@ -66,7 +66,7 @@ export function ServiceEditorPage() {
           <div>
             <div className="mb-2 text-[13px] font-semibold text-ink-2">Tipo de evento</div>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
-              {EVENT_KINDS.map((k) => {
+              {EVENT_KINDS.filter((k) => !k.retired || k.id === kind.id).map((k) => {
                 const active = kind.id === k.id
                 return (
                   <button
@@ -93,11 +93,6 @@ export function ServiceEditorPage() {
                 )
               })}
             </div>
-            <p className="mt-2 text-[12.5px] text-muted">
-              {kind.presentation
-                ? 'Apresentação: aparece como “próximo evento” e pode ter votação das músicas.'
-                : 'Não é apresentação: fica na programação, mas não conta como próximo evento nem abre votação.'}
-            </p>
           </div>
           <div className="flex flex-wrap gap-2">
             {kind.presets.map((p) => (
@@ -106,7 +101,7 @@ export function ServiceEditorPage() {
               </Chip>
             ))}
           </div>
-          <Field label="Nome do evento">{(fid) => <Input id={fid} value={service.title} onChange={(e) => set('title', e.target.value)} placeholder="Ex.: Culto de Celebração" />}</Field>
+          <Field label="Nome do evento">{(fid) => <Input id={fid} value={service.title} onChange={(e) => set('title', e.target.value)} placeholder="Ex.: Culto de Domingo" />}</Field>
           <div className="grid grid-cols-2 gap-3">
             <Field label="Data">{(fid) => <Input id={fid} type="date" value={service.date} onChange={(e) => e.target.value && set('date', e.target.value)} />}</Field>
             <Field label="Horário">{(fid) => <Input id={fid} type="time" value={service.time ?? ''} onChange={(e) => set('time', e.target.value || null)} />}</Field>
@@ -115,11 +110,11 @@ export function ServiceEditorPage() {
 
         <Card className="space-y-4 p-5 sm:p-6">
           <h2 className="text-[16px] font-bold">Mensagem</h2>
-          <Field label="Tema da pregação" hint="ajuda o assistente a sugerir músicas">
+          <Field label="Tema da pregação">
             {(fid) => <Input id={fid} value={service.theme} onChange={(e) => set('theme', e.target.value)} placeholder="Ex.: A fidelidade de Deus nas estações difíceis" />}
           </Field>
           <Field label="Texto bíblico">{(fid) => <Input id={fid} value={service.bibleText} onChange={(e) => set('bibleText', e.target.value)} placeholder="Ex.: Lamentações 3:22-23" />}</Field>
-          <Field label="Observações" hint="horário de passagem de som, figurino…">
+          <Field label="Observações">
             {(fid) => <Textarea id={fid} rows={3} value={service.notes} onChange={(e) => set('notes', e.target.value)} />}
           </Field>
         </Card>
@@ -145,7 +140,6 @@ export function ServiceEditorPage() {
                 </button>
               ))}
           </div>
-          <p className="mt-3 text-[12.5px] text-muted">A escala completa (vozes e instrumentos) é montada na página do evento.</p>
         </Card>
 
         <div className="flex justify-end gap-2">

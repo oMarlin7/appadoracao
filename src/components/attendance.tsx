@@ -72,7 +72,7 @@ export function JustifySheet({
       open={open}
       onClose={onClose}
       title={self ? 'Não vou poder ir' : `Ausência de ${firstName(profile?.name ?? 'membro')}`}
-      description={`${service.title} · avisar com antecedência ajuda o líder a reorganizar a escala.`}
+      description={service.title}
       footer={
         <Button
           className="w-full"

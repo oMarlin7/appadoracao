@@ -396,7 +396,6 @@ export function AddRecordingSheet({ open, onClose, serviceId: initialService = n
       open={open}
       onClose={close}
       title="Gravação de ensaio"
-      description="Grave pelo celular durante o ensaio ou envie um áudio/vídeo que você já tem."
       footer={
         mode !== 'choose' && (
           <div className="flex gap-2">
@@ -416,7 +415,6 @@ export function AddRecordingSheet({ open, onClose, serviceId: initialService = n
             <ChoiceButton
               icon={Mic}
               title="Gravar agora"
-              description="Usa o microfone deste aparelho"
               color="rose"
               onClick={() => {
                 setMode('record')
@@ -424,7 +422,7 @@ export function AddRecordingSheet({ open, onClose, serviceId: initialService = n
               }}
             />
           )}
-          <ChoiceButton icon={Upload} title="Enviar arquivo" description="MP3, M4A, WAV ou vídeo (até 100 MB)" color="sky" onClick={() => fileInput.current?.click()} />
+          <ChoiceButton icon={Upload} title="Enviar arquivo" description="Áudio ou vídeo" color="sky" onClick={() => fileInput.current?.click()} />
           <input
             ref={fileInput}
             type="file"
@@ -532,7 +530,7 @@ function RecordingDetails(p: {
   )
 }
 
-function ChoiceButton({ icon: Icon, title, description, color, onClick }: { icon: LucideIcon; title: string; description: string; color: 'rose' | 'sky'; onClick: () => void }) {
+function ChoiceButton({ icon: Icon, title, description, color, onClick }: { icon: LucideIcon; title: string; description?: string; color: 'rose' | 'sky'; onClick: () => void }) {
   return (
     <button type="button" onClick={onClick} className="flex items-center gap-3.5 rounded-3xl border border-line bg-surface p-4 text-left shadow-card transition-transform active:scale-[0.98]">
       <span className={cn('grid size-12 shrink-0 place-items-center rounded-2xl', color === 'rose' ? 'bg-rose text-rose-ink' : 'bg-sky text-sky-ink')}>
@@ -540,7 +538,7 @@ function ChoiceButton({ icon: Icon, title, description, color, onClick }: { icon
       </span>
       <span className="min-w-0">
         <span className="block text-[15px] font-bold text-ink">{title}</span>
-        <span className="block text-[12.5px] text-muted">{description}</span>
+        {description && <span className="block text-[12.5px] text-muted">{description}</span>}
       </span>
     </button>
   )

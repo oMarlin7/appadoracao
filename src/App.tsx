@@ -161,6 +161,12 @@ const live = (source: 'service' | 'playlist' | 'song') =>
       },
   )
 
+/** Endereços antigos (/acervo…) continuam abrindo a página certa. */
+function LegacyLibraryRedirect() {
+  const { pathname, search } = useLocation()
+  return <Navigate to={pathname.replace(/^\/acervo/, '/musicas') + search} replace />
+}
+
 const router = createBrowserRouter([
   { path: '/entrar', element: <AuthPage /> },
   { path: '/nova-senha', element: <NewPasswordPage /> },
@@ -179,9 +185,10 @@ const router = createBrowserRouter([
         element: <AppLayout />,
         children: [
           { index: true, element: <HomePage /> },
-          { path: 'acervo', element: <LibraryPage /> },
-          { path: 'acervo/tema/:themeId', element: <ThemePage /> },
-          { path: 'acervo/momento/:momentId', element: <MomentPage /> },
+          { path: 'musicas', element: <LibraryPage /> },
+          { path: 'acervo/*', element: <LegacyLibraryRedirect /> },
+          { path: 'musicas/tema/:themeId', element: <ThemePage /> },
+          { path: 'musicas/momento/:momentId', element: <MomentPage /> },
           { path: 'favoritas', element: <FavoritesPage /> },
           { path: 'musica/nova', lazy: lazyPage(() => import('./pages/song-editor'), (m) => m.SongEditorPage), handle: hideNav },
           { path: 'musica/:id', element: <SongPage />, handle: hideNav },

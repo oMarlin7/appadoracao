@@ -119,7 +119,7 @@ export function NewPlaylistForm({ initialSongIds = [], onDone }: { initialSongId
           ))}
         </div>
       </div>
-      <Switch checked={isShared} onChange={setShared} label="Compartilhar com a equipe" description="Todos os membros podem ver e tocar esta playlist." />
+      <Switch checked={isShared} onChange={setShared} label="Compartilhar com a equipe" />
       <div className="flex justify-end gap-2 pt-1">
         <Button variant="ghost" onClick={() => onDone(null)}>
           Cancelar
@@ -162,11 +162,6 @@ export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { son
       open={open}
       onClose={onClose}
       title="Sugerir música"
-      description={
-        selectedInfo?.enabled
-          ? 'As sugestões viram as opções da votação da equipe. As mais votadas entram no setlist.'
-          : 'A sugestão vai para o líder, que escolhe as músicas do culto. A equipe pode apoiar.'
-      }
       footer={
         <Button
           className="w-full"
@@ -224,7 +219,7 @@ export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { son
         >
           <span className="min-w-0 flex-1">
             <span className="block font-bold text-ink">Para um culto em breve</span>
-            <span className="block text-[13px] text-muted">Sem data definida — o líder vê na lista de sugestões</span>
+            <span className="block text-[13px] text-muted">Sem data definida</span>
           </span>
           {selected === null && <Check className="size-5 text-primary" strokeWidth={2.5} />}
         </button>
@@ -268,7 +263,6 @@ export function AddToServiceSheet({ song, open, onClose, initialKey }: { song: S
         <EmptyState
           icon={CalendarPlus}
           title="Nenhum evento agendado"
-          description="Crie o próximo culto ou evento para montar o setlist."
           action={
             <Button
               icon={Plus}
@@ -314,7 +308,7 @@ export function AddToServiceSheet({ song, open, onClose, initialKey }: { song: S
 }
 
 // ---------------------------------------------------------------------------
-// Escolher música (busca no acervo)
+// Escolher música
 // ---------------------------------------------------------------------------
 
 export function SongPickerSheet({

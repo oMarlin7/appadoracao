@@ -9,7 +9,7 @@ import {
   type SelectHTMLAttributes,
   type TextareaHTMLAttributes,
 } from 'react'
-import { Check, ChevronDown, Search, X, type LucideIcon } from 'lucide-react'
+import { Check, ChevronDown, Minus, Plus, Search, X, type LucideIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { tint, type Pastel } from '@/lib/taxonomy'
 
@@ -245,6 +245,41 @@ export function Segmented<T extends string>({
           </button>
         )
       })}
+    </div>
+  )
+}
+
+/** − valor + (ex.: quantas músicas a votação escolhe). */
+export function Stepper({
+  value,
+  onChange,
+  min = 1,
+  max = 20,
+  format = String,
+  label,
+  className,
+}: {
+  value: number
+  onChange: (v: number) => void
+  min?: number
+  max?: number
+  format?: (v: number) => ReactNode
+  label: string
+  className?: string
+}) {
+  const btn =
+    'grid size-8 place-items-center rounded-full bg-surface text-ink shadow-card transition-transform active:scale-90 disabled:opacity-35 disabled:shadow-none dark:bg-white/10'
+  return (
+    <div role="group" aria-label={label} className={cn('inline-flex items-center gap-1 rounded-full bg-surface-2 p-1 dark:bg-black/25 dark:ring-1 dark:ring-white/5', className)}>
+      <button type="button" aria-label="Diminuir" disabled={value <= min} onClick={() => onChange(Math.max(min, value - 1))} className={btn}>
+        <Minus className="size-4" strokeWidth={2.6} />
+      </button>
+      <span aria-live="polite" className="min-w-[92px] px-1 text-center text-[13.5px] font-bold text-ink tabular-nums">
+        {format(value)}
+      </span>
+      <button type="button" aria-label="Aumentar" disabled={value >= max} onClick={() => onChange(Math.min(max, value + 1))} className={btn}>
+        <Plus className="size-4" strokeWidth={2.6} />
+      </button>
     </div>
   )
 }

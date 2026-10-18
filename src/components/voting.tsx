@@ -8,12 +8,12 @@ import { AvatarStack } from '@/components/avatar'
 import { SongCover } from '@/components/song-bits'
 import { Button } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
-import { Card, Segmented } from '@/components/ui/primitives'
+import { Card, Stepper } from '@/components/ui/primitives'
 import { applyPoll, closePollNow, openPollNow, setPoll, suggestSong, toggleVote } from '@/lib/actions'
 import { isPresentation } from '@/lib/events'
 import { useIsAdmin, useMe, useRow, useRows, useTable } from '@/lib/store'
 import { cn, compact, firstName, plural } from '@/lib/utils'
-import { formatDeadline, tally, tieAtCutoff, timeLeft, votingActive, votingInfo, winners } from '@/lib/voting'
+import { MAX_VOTING_PICKS, formatDeadline, tally, tieAtCutoff, timeLeft, votingActive, votingInfo, winners } from '@/lib/voting'
 import type { Service } from '@/types'
 
 /** Leva o resultado das votações encerradas para o setlist (roda em qualquer aparelho da equipe). */
@@ -138,13 +138,18 @@ export function ServiceVoting({ service }: { service: Service }) {
                 )}
                 items={[
                   { label: 'Abrir agora', icon: Play, hidden: info.phase !== 'agendada', onSelect: () => void openPollNow(service.id) },
-                  { label: 'Encerrar agora', icon: CircleStop, hidden: !open, description: 'As mais votadas entram no setlist', onSelect: () => void closePollNow(service.id) },
+                  {
+                    label: 'Encerrar agora',
+                    icon: CircleStop,
+                    hidden: !open,
+                    description: 'As mais votadas vão para o setlist',
+                    onSelect: () => void closePollNow(service.id).then((ok) => ok && toast.success('Votação encerrada 🎉', { description: 'As mais votadas já estão no setlist.' })),
+                  },
                   { label: 'Reabrir por 2 dias', icon: CalendarClock, hidden: !closed || info.applied, onSelect: () => void openPollNow(service.id) },
                   {
                     label: 'Escolher direto (sem votação)',
                     icon: Hand,
                     hidden: closed && info.applied,
-                    description: 'Só neste evento',
                     onSelect: () => void setPoll(service.id, { mode: 'lider' }).then((ok) => ok && toast('Você escolhe as músicas deste evento')),
                   },
                 ]}
@@ -169,14 +174,12 @@ export function ServiceVoting({ service }: { service: Service }) {
               </div>
             )}
             {isLeader && !closed && (
-              <Segmented
-                size="sm"
-                value={String(info.picks)}
-                onChange={(v) => void setPoll(service.id, { picks: Number(v) })}
-                options={[
-                  { value: '2', label: '2 músicas' },
-                  { value: '3', label: '3 músicas' },
-                ]}
+              <Stepper
+                label="Músicas escolhidas na votação"
+                value={info.picks}
+                max={MAX_VOTING_PICKS}
+                format={(n) => plural(n, 'música', 'músicas')}
+                onChange={(n) => void setPoll(service.id, { picks: n })}
               />
             )}
           </div>
@@ -189,7 +192,6 @@ export function ServiceVoting({ service }: { service: Service }) {
           <div className="flex flex-col items-center gap-2 px-6 py-8 text-center">
             <Lightbulb className="size-7 text-butter-ink" />
             <p className="text-[14px] font-semibold text-ink">Nenhuma sugestão ainda</p>
-            <p className="text-[13px] text-muted">As sugestões da equipe para este evento viram as opções da votação.</p>
           </div>
         ) : (
           <ul className="space-y-0.5">
@@ -258,7 +260,7 @@ export function ServiceVoting({ service }: { service: Service }) {
       </Card>
       {closed && tieAtCutoff(candidates, info.picks) && <p className="mt-2 px-1 text-[12.5px] text-muted">Empate na última vaga: entrou a música sugerida primeiro.</p>}
       {closed && !info.applied && win.length > 0 && isLeader && (
-        <Button className="mt-3" icon={ListChecks} onClick={() => void applyPoll(service.id).then((ok) => ok && toast.success('Músicas da votação no setlist 🎉'))}>
+        <Button className="mt-3" icon={ListChecks} onClick={() => void applyPoll(service.id, { manual: true }).then((ok) => ok && toast.success('Músicas da votação no setlist 🎉'))}>
           Levar para o setlist
         </Button>
       )}

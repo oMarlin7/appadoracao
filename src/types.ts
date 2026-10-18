@@ -259,6 +259,15 @@ export interface Announcement {
   updatedAt: string
 }
 
+/** Avisos que o membro já viu ou excluiu (um registro por pessoa, igual em todos os aparelhos). */
+export interface InboxState {
+  /** id do perfil */
+  id: Id
+  dismissed: string[]
+  seen: string[]
+  updatedAt: string
+}
+
 export interface Tables {
   profiles: Profile
   songs: Song
@@ -276,6 +285,7 @@ export interface Tables {
   song_polls: SongPoll
   votes: Vote
   announcements: Announcement
+  inbox_state: InboxState
 }
 
 export type TableName = keyof Tables
@@ -298,6 +308,7 @@ export const TABLES: TableName[] = [
   'song_polls',
   'votes',
   'announcements',
+  'inbox_state',
 ]
 
 export type DataSnapshot = { [K in TableName]: Record<Id, Tables[K]> }

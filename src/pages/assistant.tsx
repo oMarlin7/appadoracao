@@ -96,7 +96,7 @@ export function AssistantPage() {
             </span>
             <div>
               <h1 className="text-[22px] leading-tight font-extrabold tracking-tight text-ink sm:text-[26px]">Assistente de repertório</h1>
-              <p className="text-[13.5px] font-medium text-ink-2">Diga o que o momento pede — eu procuro no acervo.</p>
+              <p className="text-[13.5px] font-medium text-ink-2">Diga o que o momento pede e eu procuro a música certa.</p>
             </div>
           </div>
           <form
@@ -246,7 +246,7 @@ export function AssistantPage() {
               icon={Lightbulb}
               color="lavender"
               title="Qual é o momento do culto?"
-              description="Escreva um pedido ou escolha momento, tema e ritmo. As sugestões consideram transições de tom, o que a equipe já conhece e o que foi tocado recentemente."
+              description="Escreva um pedido ou escolha momento, tema e ritmo."
             />
           ) : (
             <>
@@ -258,7 +258,7 @@ export function AssistantPage() {
                 }
               />
               {results.length === 0 ? (
-                <EmptyState icon={Sparkles} title="Nenhuma música encontrada" description="Tente tirar algum filtro ou cadastre mais músicas com temas e momentos." />
+                <EmptyState icon={Sparkles} title="Nenhuma música encontrada" description="Tente tirar algum filtro." />
               ) : (
                 <div className="space-y-2.5">
                   {results.map((r, i) => (
@@ -304,7 +304,7 @@ export function AssistantPage() {
 
           {isLeader && upcoming.length > 0 && (
             <section className="mt-10">
-              <SectionTitle title="Montar o setlist inteiro" subtitle="Abertura → louvor → adoração → ministração, com os tons emendando" />
+              <SectionTitle title="Montar o setlist inteiro" subtitle="Da abertura à ministração" />
               <div className="grid grid-cols-1 gap-2.5 sm:grid-cols-2">
                 {upcoming.slice(0, 4).map((s) => (
                   <Link key={s.id} to={`/cultos/${s.id}?assistente=1`} className="flex items-center gap-3 rounded-3xl border border-line bg-surface p-4 shadow-card transition-transform active:scale-[0.99]">

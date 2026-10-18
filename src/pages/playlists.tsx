@@ -90,7 +90,7 @@ export function PlaylistsPage() {
           icon={ListMusic}
           color="mint"
           title="Nenhuma playlist aqui"
-          description="Monte repertórios para o ensaio, para a cantata de Natal ou para ouvir durante a semana."
+          description="Monte repertórios para ensaios e datas especiais."
           action={
             <Button icon={Plus} onClick={() => setCreating(true)}>
               Criar playlist
@@ -267,7 +267,7 @@ function PlaylistView({ playlist }: { playlist: Playlist }) {
                 danger: true,
                 hidden: !canEdit,
                 onSelect: async () => {
-                  if (await confirm({ title: 'Excluir esta playlist?', description: 'As músicas continuam no acervo.', confirmLabel: 'Excluir', danger: true })) {
+                  if (await confirm({ title: 'Excluir esta playlist?', confirmLabel: 'Excluir', danger: true })) {
                     await deletePlaylist(playlist.id)
                     navigate('/playlists')
                   }
@@ -309,7 +309,7 @@ function PlaylistView({ playlist }: { playlist: Playlist }) {
 
         <div className="mt-6">
           {list.length === 0 ? (
-            <EmptyState icon={ListMusic} title="Playlist vazia" description="Adicione músicas do acervo." action={canEdit && <Button icon={Plus} onClick={() => setSheet('add')}>Adicionar músicas</Button>} />
+            <EmptyState icon={ListMusic} title="Playlist vazia" action={canEdit && <Button icon={Plus} onClick={() => setSheet('add')}>Adicionar músicas</Button>} />
           ) : (
             <Card className="p-1.5">
               <Reorder.Group axis="y" values={order} onReorder={setOrder} className="space-y-0.5">

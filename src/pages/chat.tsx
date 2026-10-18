@@ -21,7 +21,7 @@ function Attachment({ message, mine }: { message: Message; mine: boolean }) {
   const services = useTable('services')
   if (message.songId) {
     const song = songs[message.songId]
-    if (!song) return <div className="text-[13px] text-muted italic">Música removida do acervo</div>
+    if (!song) return <div className="text-[13px] text-muted italic">Música removida</div>
     return (
       <Link
         to={`/musica/${song.id}`}
@@ -145,7 +145,7 @@ export function ChatPage() {
       >
         <div className="mx-auto max-w-3xl px-3 py-4 sm:px-5">
           {sorted.length === 0 && (
-            <EmptyState icon={MessageCircle} color="sky" title="Comece a conversa" description="Combine ensaios, compartilhe músicas e ore pela equipe. Todos os membros veem aqui." />
+            <EmptyState icon={MessageCircle} color="sky" title="Comece a conversa" description="Combine ensaios e compartilhe músicas." />
           )}
           {sorted.map((m, i) => {
             const prev = sorted[i - 1]

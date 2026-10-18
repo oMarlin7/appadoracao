@@ -29,8 +29,8 @@ const missingColumn = (e: { code?: string; message?: string }) => {
   if (e.code !== 'PGRST204' && !/column .* does not exist|could not find the '.*' column/i.test(e.message ?? '')) return null
   return /'([a-z_]+)' column|column "?([a-z_]+)"? /i.exec(e.message ?? '')?.slice(1).find(Boolean) ?? null
 }
-/** Tabelas das migrações v2/v3: sem elas o app segue funcionando, só sem as funções novas. */
-const OPTIONAL_TABLES: TableName[] = ['attendance', 'recordings', 'custom_themes', 'song_polls', 'votes', 'announcements']
+/** Tabelas das migrações v2 em diante: sem elas o app segue funcionando, só sem as funções novas. */
+const OPTIONAL_TABLES: TableName[] = ['attendance', 'recordings', 'custom_themes', 'song_polls', 'votes', 'announcements', 'inbox_state']
 const UPGRADE_HINT = 'O banco precisa ser atualizado: rode no SQL Editor os arquivos de supabase/migrations que ainda não rodou (veja o README).'
 
 function translateError(e: unknown): Error {

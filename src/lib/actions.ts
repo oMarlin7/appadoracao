@@ -2,7 +2,7 @@ import { toast } from 'sonner'
 import { backend, isNetworkError } from './backend'
 import { normalizeKeyName } from './music/theory'
 import { currentUserId, getData, useData } from './store'
-import { enqueue, refresh } from './sync'
+import { enqueue, flushOutbox, refresh } from './sync'
 import type { Pastel } from './taxonomy'
 import { normalizeSearch, nowIso, todayString, uid } from './utils'
 import { itemsFromWinners, tally, votingInfo, winners } from './voting'
@@ -12,6 +12,7 @@ import type {
   AttendanceStatus,
   CustomTheme,
   Id,
+  InboxState,
   Message,
   Playlist,
   Profile,
@@ -47,12 +48,27 @@ export function errorMessage(e: unknown): string {
   return 'Algo deu errado. Tente novamente.'
 }
 
+/** Envios em andamento: quem chama uma função do servidor espera por eles antes. */
+const inflight = new Set<Promise<unknown>>()
+
+function track<T>(p: Promise<T>): Promise<T> {
+  inflight.add(p)
+  void p.catch(() => {}).finally(() => inflight.delete(p))
+  return p
+}
+
+/** Espera os envios em andamento e a fila offline (ex.: antes de aplicar a votação no banco). */
+export async function settleWrites() {
+  await Promise.allSettled([...inflight])
+  await flushOutbox()
+}
+
 async function save<T extends TableName>(table: T, row: Tables[T]): Promise<boolean> {
   const store = useData.getState()
   const prev = getData()[table][row.id] as Tables[T] | undefined
   store.upsertLocal(table, row)
   try {
-    await backend.upsert(table, row)
+    await track(backend.upsert(table, row))
     return true
   } catch (e) {
     if (isNetworkError(e)) {
@@ -73,7 +89,7 @@ async function destroy(table: TableName, id: Id): Promise<boolean> {
   if (!prev) return true
   store.removeLocal(table, id)
   try {
-    await backend.remove(table, id)
+    await track(backend.remove(table, id))
     return true
   } catch (e) {
     if (isNetworkError(e)) {
@@ -541,54 +557,93 @@ export async function openPollNow(serviceId: Id) {
   return setPoll(serviceId, { mode: 'votacao', opensAt: new Date(now - 1000).toISOString(), closesAt: closes.toISOString(), appliedAt: null })
 }
 
+/** O líder encerra a votação; as mais votadas já entram no setlist. */
 export async function closePollNow(serviceId: Id) {
   const info = pollInfo(serviceId)
   if (!info) return false
   const now = Date.now()
-  return setPoll(serviceId, {
+  const ok = await setPoll(serviceId, {
     opensAt: info.opensAt.getTime() < now ? info.opensAt.toISOString() : new Date(now - 2000).toISOString(),
     closesAt: new Date(now - 1000).toISOString(),
   })
+  if (!ok) return false
+  return applyPoll(serviceId, { manual: true })
 }
 
-const applying = new Set<Id>()
-/** Falhas que não são de rede (ex.: banco sem a migração v3) não são repetidas a cada minuto. */
-const applyFailed = new Set<Id>()
+/** Votações sendo aplicadas agora (o botão e a automação esperam a mesma tentativa). */
+const applying = new Map<Id, Promise<boolean>>()
+/**
+ * Falhas que não são de rede (ex.: banco sem a migração) não são repetidas a cada minuto pela
+ * automação — até a votação mudar. O botão do líder sempre tenta de novo.
+ */
+const applyFailed = new Map<Id, string>()
 
 /**
  * Leva as mais votadas para o setlist depois do prazo. Qualquer aparelho da equipe pode fazer
  * isso (no Supabase pela função aplicar_votacao, que confere prazo e votos no banco).
  */
-export async function applyPoll(serviceId: Id): Promise<boolean> {
+export function applyPoll(serviceId: Id, opts: { manual?: boolean } = {}): Promise<boolean> {
+  const running = applying.get(serviceId)
+  if (running) return running
   const data = getData()
   const svc = data.services[serviceId]
   const info = pollInfo(serviceId)
-  if (!svc || !info || !info.enabled || info.phase !== 'encerrada' || info.applied || applying.has(serviceId) || applyFailed.has(serviceId)) return false
+  const pollVersion = data.song_polls[serviceId]?.updatedAt ?? ''
+  if (!svc || !info || !info.enabled || info.phase !== 'encerrada' || info.applied) return Promise.resolve(false)
+  if (!opts.manual && applyFailed.get(serviceId) === pollVersion) return Promise.resolve(false)
   const win = winners(tally(serviceId, Object.values(data.suggestions), Object.values(data.votes), (id) => !!data.songs[id]), info.picks)
-  if (!win.length) return false
-  applying.add(serviceId)
-  try {
-    if (backend.mode === 'supabase') {
-      await backend.rpc<number>('aplicar_votacao', { sid: serviceId })
-      await refresh()
+  if (!win.length) return Promise.resolve(false)
+
+  const run = async (): Promise<boolean> => {
+    try {
+      if (backend.mode === 'supabase') {
+        // A mudança no prazo (ex.: "Encerrar agora") precisa chegar ao banco antes.
+        await settleWrites()
+        await backend.rpc<number>('aplicar_votacao', { sid: serviceId })
+        applyFailed.delete(serviceId)
+        await refresh()
+        return true
+      }
+      const now = nowIso()
+      await save('services', { ...svc, items: itemsFromWinners(svc.items, win, data.songs), updatedAt: now })
+      for (const s of Object.values(data.suggestions))
+        if (s.serviceId === serviceId && win.some((w) => w.songId === s.songId) && s.status !== 'aceita') await save('suggestions', { ...s, status: 'aceita', updatedAt: now })
+      const base: SongPoll = data.song_polls[serviceId] ?? { id: serviceId, mode: 'votacao', picks: null, opensAt: null, closesAt: null, appliedAt: null, createdBy: null, createdAt: now, updatedAt: now }
+      await save('song_polls', { ...base, appliedAt: now, updatedAt: now })
       return true
+    } catch (e) {
+      if (!isNetworkError(e)) {
+        applyFailed.set(serviceId, pollVersion)
+        console.warn('Não foi possível aplicar a votação', e)
+      }
+      if (opts.manual) toast.error('Não foi possível levar para o setlist', { description: errorMessage(e) })
+      return false
     }
-    const now = nowIso()
-    await save('services', { ...svc, items: itemsFromWinners(svc.items, win, data.songs), updatedAt: now })
-    for (const s of Object.values(data.suggestions))
-      if (s.serviceId === serviceId && win.some((w) => w.songId === s.songId) && s.status !== 'aceita') await save('suggestions', { ...s, status: 'aceita', updatedAt: now })
-    const base: SongPoll = data.song_polls[serviceId] ?? { id: serviceId, mode: 'votacao', picks: null, opensAt: null, closesAt: null, appliedAt: null, createdBy: null, createdAt: now, updatedAt: now }
-    await save('song_polls', { ...base, appliedAt: now, updatedAt: now })
-    return true
-  } catch (e) {
-    if (!isNetworkError(e)) {
-      applyFailed.add(serviceId)
-      console.warn('Não foi possível aplicar a votação', e)
-    }
-    return false
-  } finally {
-    applying.delete(serviceId)
   }
+  const p = run().finally(() => applying.delete(serviceId))
+  applying.set(serviceId, p)
+  return p
+}
+
+// ---------------------------------------------------------------------------
+// Notificações lidas e excluídas
+// ---------------------------------------------------------------------------
+
+/** Guarda só as mais recentes (os ids carregam o estado do aviso e mudam com o tempo). */
+const INBOX_MEMORY = 300
+
+export async function updateInboxState(patch: { dismiss?: string[]; restore?: boolean; seen?: string[] }): Promise<boolean> {
+  const userId = me()
+  const prev = getData().inbox_state[userId]
+  const merge = (a: string[], b: string[] = []) => [...new Set([...a, ...b])].slice(-INBOX_MEMORY)
+  const row: InboxState = {
+    id: userId,
+    dismissed: patch.restore ? [] : merge(prev?.dismissed ?? [], patch.dismiss),
+    seen: merge(prev?.seen ?? [], patch.seen),
+    updatedAt: nowIso(),
+  }
+  if (prev && row.dismissed.join('\n') === prev.dismissed.join('\n') && row.seen.join('\n') === prev.seen.join('\n')) return true
+  return save('inbox_state', row)
 }
 
 // ---------------------------------------------------------------------------
@@ -710,7 +765,7 @@ export async function deleteCustomTheme(id: Id) {
 }
 
 // ---------------------------------------------------------------------------
-// Backup do acervo
+// Backup das músicas
 // ---------------------------------------------------------------------------
 
 export function exportLibrary(): string {

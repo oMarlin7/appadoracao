@@ -63,7 +63,7 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
   const services: Service[] = [
     {
       id: 'svc-celebracao',
-      title: 'Culto de Celebração',
+      title: 'Consagração',
       date: date(0),
       time: '19:00',
       theme: 'A fidelidade de Deus em todas as estações',
@@ -153,7 +153,7 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     },
     {
       id: 'svc-passado-2',
-      title: 'Culto de Oração',
+      title: 'Culto de Libertação',
       date: date(-11),
       time: '20:00',
       theme: 'Buscando a face de Deus',
@@ -214,13 +214,13 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     },
     {
       id: 'svc-confra',
-      title: 'Confraternização da equipe',
-      kind: 'confraternizacao',
+      title: 'Reunião do ministério',
+      kind: 'reuniao',
       date: date(13),
       time: '12:00',
-      theme: 'Almoço na casa da Ana',
+      theme: 'Planejamento do trimestre',
       bibleText: '',
-      notes: 'Cada um leva um prato 🍲',
+      notes: 'Depois do culto, na sala do ministério',
       leaderId: 'demo-ana',
       items: [],
       team: [],

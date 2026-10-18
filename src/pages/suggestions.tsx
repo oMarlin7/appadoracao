@@ -55,7 +55,7 @@ export function SuggestionsPage() {
           color="butter"
           title={status === 'pendente' ? 'Nenhuma sugestão pendente' : 'Nada por aqui'}
           description="Abra qualquer música e toque em “Sugerir” para indicá-la a um culto."
-          action={status === 'pendente' && <LinkButton to="/acervo">Explorar o acervo</LinkButton>}
+          action={status === 'pendente' && <LinkButton to="/musicas">Ver músicas</LinkButton>}
         />
       ) : (
         <div className="space-y-8">

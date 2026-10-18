@@ -78,7 +78,7 @@ function FilterSheet({ open, onClose, filters, update, count }: { open: boolean;
     <Sheet
       open={open}
       onClose={onClose}
-      title="Filtrar acervo"
+      title="Filtrar músicas"
       tall
       footer={
         <div className="flex gap-2">
@@ -275,7 +275,6 @@ export function LibraryPage() {
         <section className="mt-6">
           <SectionTitle
             title="Navegar por tema"
-            subtitle="Encontre pelo assunto da mensagem"
             action={
               <Link to="/temas" className="shrink-0 text-[13px] font-bold text-primary">
                 Todos os temas
@@ -284,7 +283,7 @@ export function LibraryPage() {
           />
           <div className="no-scrollbar -mx-4 flex gap-2.5 overflow-x-auto px-4 pb-1 sm:-mx-6 sm:px-6 lg:mx-0 lg:grid lg:grid-cols-5 lg:px-0">
             {themes.filter((t) => themeCounts.get(t.id)).map((t) => (
-              <ThemeTile key={t.id} theme={t} count={themeCounts.get(t.id) ?? 0} to={`/acervo/tema/${t.id}`} className="w-[150px] shrink-0 lg:w-auto" />
+              <ThemeTile key={t.id} theme={t} count={themeCounts.get(t.id) ?? 0} to={`/musicas/tema/${t.id}`} className="w-[150px] shrink-0 lg:w-auto" />
             ))}
           </div>
         </section>
@@ -318,8 +317,8 @@ export function LibraryPage() {
           songs.length === 0 ? (
             <EmptyState
               icon={Music}
-              title="O acervo está vazio"
-              description="Cadastre as músicas que o ministério canta. Dá para colar a cifra direto do Cifra Club."
+              title="Nenhuma música ainda"
+              description="Adicione as músicas que o ministério canta."
               action={
                 <LinkButton to="/musica/nova" icon={Plus}>
                   Adicionar primeira música
@@ -330,7 +329,7 @@ export function LibraryPage() {
             <EmptyState
               icon={Sparkles}
               title="Nada encontrado"
-              description="Tente outra palavra ou peça ajuda ao assistente para achar algo parecido."
+              description="Tente outra palavra."
               action={
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => update({ q: '', themes: [], moments: [], tempo: null, key: null, fav: false })}>
@@ -409,7 +408,7 @@ export function ThemePage() {
   if (!theme) return <NotFoundInline />
   return (
     <Page>
-      <PageHeader back="/acervo" title="" className="pb-0" />
+      <PageHeader back="/musicas" title="" className="pb-0" />
       <CollectionHero
         title={theme.name}
         description={theme.description}
@@ -436,7 +435,7 @@ export function ThemePage() {
         </div>
       )}
       <div className="mt-4">
-        {list.length ? <SongList songs={list} /> : <EmptyState icon={Music} title="Nenhuma música aqui ainda" description="Ao cadastrar uma música, marque este tema para ela aparecer aqui." />}
+        {list.length ? <SongList songs={list} /> : <EmptyState icon={Music} title="Nenhuma música aqui ainda" />}
       </div>
     </Page>
   )
@@ -451,7 +450,7 @@ export function MomentPage() {
   if (!moment) return <NotFoundInline />
   return (
     <Page>
-      <PageHeader back="/acervo" title="" className="pb-0" />
+      <PageHeader back="/musicas" title="" className="pb-0" />
       <CollectionHero
         title={moment.name}
         description={moment.description}
@@ -485,7 +484,7 @@ export function FavoritesPage() {
       {mine.length ? (
         <SongList songs={mine} />
       ) : (
-        <EmptyState icon={Heart} color="rose" title="Nenhuma favorita ainda" description="Toque no coração de qualquer música para guardá-la aqui." action={<LinkButton to="/acervo">Ir para o acervo</LinkButton>} />
+        <EmptyState icon={Heart} color="rose" title="Nenhuma favorita ainda" description="Toque no coração de qualquer música para guardá-la aqui." action={<LinkButton to="/musicas">Ver músicas</LinkButton>} />
       )}
       {team.length > 0 && (
         <section className="mt-10">
@@ -504,7 +503,7 @@ export function FavoritesPage() {
 function NotFoundInline() {
   return (
     <Page>
-      <EmptyState icon={Music} title="Não encontrado" action={<LinkButton to="/acervo">Voltar ao acervo</LinkButton>} />
+      <EmptyState icon={Music} title="Não encontrado" action={<LinkButton to="/musicas">Voltar às músicas</LinkButton>} />
     </Page>
   )
 }

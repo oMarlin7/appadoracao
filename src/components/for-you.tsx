@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link } from 'react-router'
 import { AnimatePresence, motion } from 'motion/react'
 import { toast } from 'sonner'
 import {
   AudioLines,
   Bell,
+  BellOff,
   CalendarClock,
   Check,
   ChevronRight,
@@ -40,10 +41,10 @@ import { Button } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
 import { Chip, Field, Input, Segmented, Switch, Textarea } from '@/components/ui/primitives'
 import { Sheet, confirm } from '@/components/ui/sheet'
-import { deleteAnnouncement, saveAnnouncement, setAttendance } from '@/lib/actions'
+import { deleteAnnouncement, saveAnnouncement, setAttendance, updateInboxState } from '@/lib/actions'
 import { buildInbox, type InboxItem, type InboxVisual } from '@/lib/inbox'
-import { readJson, writeStorage } from '@/lib/storage'
-import { useIsAdmin, useMe, useRows, useTable } from '@/lib/store'
+import { readJson, removeStorage } from '@/lib/storage'
+import { useIsAdmin, useMe, useRow, useRows, useTable } from '@/lib/store'
 import { PASTELS, ROLES, ink, soft, solid, type Pastel } from '@/lib/taxonomy'
 import { addDays, cn, dayOfMonth, firstName, monthShort, toLocalDateString, weekdayName } from '@/lib/utils'
 import type { Announcement, Id } from '@/types'
@@ -87,7 +88,11 @@ const iconFor = (key: string) => ICONS[key] ?? Bell
 // Dados do painel
 // ---------------------------------------------------------------------------
 
-const dismissKey = (userId: Id) => `adoracao:inbox:dispensados:${userId}`
+/** Versões antigas guardavam os avisos dispensados só neste aparelho. */
+const legacyDismissKey = (userId: Id) => `adoracao:inbox:dispensados:${userId}`
+
+/** Contam no sino: o que pede atenção (não entram "tudo certo" e confirmações). */
+const BADGE_MIN_PRIORITY = 40
 
 /** Avisos do membro logado (recalcula a cada minuto por causa dos prazos). */
 export function useInbox() {
@@ -106,29 +111,35 @@ export function useInbox() {
     const t = window.setInterval(() => setTick(Date.now()), 60_000)
     return () => window.clearInterval(t)
   }, [])
-  const [dismissed, setDismissed] = useState<string[]>(() => (me ? readJson<string[]>('local', dismissKey(me.id), []) : []))
+  const state = useRow('inbox_state', me?.id ?? '')
   const meId = me?.id
-  useEffect(() => {
-    if (meId) setDismissed(readJson<string[]>('local', dismissKey(meId), []))
-  }, [meId])
+  const legacy = useMemo(() => (meId ? readJson<string[]>('local', legacyDismissKey(meId), []) : []), [meId])
+  const dismissed = useMemo(() => [...new Set([...(state?.dismissed ?? []), ...legacy])], [state, legacy])
+  const seen = state?.seen ?? []
 
   const items = useMemo(
     () => (me ? buildInbox({ me, profiles, services, songs, attendance, suggestions, votes, polls, team, announcements, now: new Date(tick) }) : []),
     [me, profiles, services, songs, attendance, suggestions, votes, polls, team, announcements, tick],
   )
-  const dismiss = (id: string) => {
-    if (!me) return
-    const next = [...new Set([...dismissed, id])].slice(-200)
-    setDismissed(next)
-    writeStorage('local', dismissKey(me.id), JSON.stringify(next))
-  }
-  const restore = () => {
-    if (!me) return
-    setDismissed([])
-    writeStorage('local', dismissKey(me.id), '[]')
+  const write = async (patch: Parameters<typeof updateInboxState>[0]) => {
+    if (!meId) return
+    if (await updateInboxState({ ...patch, dismiss: [...legacy, ...(patch.dismiss ?? [])] })) removeStorage('local', legacyDismissKey(meId))
   }
   const visible = items.filter((i) => !dismissed.includes(i.id))
-  return { items, visible, dismissed, dismiss, restore, urgent: visible.filter((i) => i.priority >= 60).length }
+  const unread = visible.filter((i) => i.priority >= BADGE_MIN_PRIORITY && !seen.includes(i.id))
+  return {
+    items,
+    visible,
+    seen,
+    hiddenCount: items.length - visible.length,
+    unread: unread.length,
+    dismiss: (id: string) => void write({ dismiss: [id] }),
+    dismissAll: () => void write({ dismiss: visible.map((i) => i.id) }),
+    markSeen: (ids: string[]) => {
+      if (ids.some((id) => !seen.includes(id))) void write({ seen: ids })
+    },
+    restore: () => void write({ restore: true }),
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -307,7 +318,7 @@ function Visual({ visual, color }: { visual: InboxVisual; color: Pastel }) {
 // Cartão
 // ---------------------------------------------------------------------------
 
-function InboxCard({ item, onDismiss, index, compact }: { item: InboxItem; onDismiss?: () => void; index: number; compact?: boolean }) {
+function InboxCard({ item, onDismiss, index, compact, fresh }: { item: InboxItem; onDismiss?: () => void; index: number; compact?: boolean; fresh?: boolean }) {
   const me = useMe()
   const [busy, setBusy] = useState(false)
   const Icon = iconFor(item.icon)
@@ -333,8 +344,9 @@ function InboxCard({ item, onDismiss, index, compact }: { item: InboxItem; onDis
           <span className="min-w-0 flex-1 truncate text-[12px] font-bold tracking-wide uppercase" style={{ color: ink(item.color) }}>
             {item.eyebrow}
           </span>
+          {fresh && <span className="size-2 shrink-0 rounded-full bg-rose-ink" aria-label="Nova" />}
           {onDismiss && (
-            <button type="button" onClick={onDismiss} aria-label="Dispensar aviso" className="-mr-1 grid size-7 place-items-center rounded-full text-muted hover:bg-surface/70 hover:text-ink">
+            <button type="button" onClick={onDismiss} aria-label="Excluir notificação" className="-mr-1 grid size-8 place-items-center rounded-full text-muted hover:bg-surface/70 hover:text-ink">
               <X className="size-4" />
             </button>
           )}
@@ -432,18 +444,28 @@ export function ForYouPanel() {
   )
 }
 
-/** Sino com o número de avisos importantes; abre a lista completa. */
+/** Sino com o número de notificações novas; abre a lista completa. */
 export function InboxBell({ className }: { className?: string }) {
-  const { urgent } = useInbox()
+  const { unread } = useInbox()
   const [open, setOpen] = useState(false)
   const [compose, setCompose] = useState(false)
   return (
     <>
-      <button type="button" onClick={() => setOpen(true)} aria-label={urgent ? `Avisos (${urgent} novos)` : 'Avisos'} className={cn('relative grid size-10 place-items-center rounded-full text-ink-2 hover:bg-surface-2', className)}>
+      <button type="button" onClick={() => setOpen(true)} aria-label={unread ? `Notificações (${unread} novas)` : 'Notificações'} className={cn('relative grid size-10 place-items-center rounded-full text-ink-2 hover:bg-surface-2', className)}>
         <Bell className="size-[21px]" strokeWidth={2.1} />
-        {urgent > 0 && (
-          <span className="absolute top-1 right-1 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-rose-ink px-1 text-[10px] font-extrabold text-white dark:text-[#2a1020]">{urgent}</span>
-        )}
+        <AnimatePresence>
+          {unread > 0 && (
+            <motion.span
+              key={unread}
+              initial={{ scale: 0.4, opacity: 0 }}
+              animate={{ scale: 1, opacity: 1 }}
+              exit={{ scale: 0.4, opacity: 0 }}
+              className="absolute top-1 right-1 grid h-[17px] min-w-[17px] place-items-center rounded-full bg-rose-ink px-1 text-[10px] font-extrabold text-white dark:text-[#2a1020]"
+            >
+              {unread > 9 ? '9+' : unread}
+            </motion.span>
+          )}
+        </AnimatePresence>
       </button>
       <InboxSheet open={open} onClose={() => setOpen(false)} onCompose={() => setCompose(true)} />
       <AnnouncementSheet open={compose} onClose={() => setCompose(false)} />
@@ -454,20 +476,57 @@ export function InboxBell({ className }: { className?: string }) {
 function InboxSheet({ open, onClose, onCompose }: { open: boolean; onClose: () => void; onCompose: () => void }) {
   const me = useMe()
   const isAdmin = useIsAdmin()
-  const { items, dismissed, restore } = useInbox()
+  const inbox = useInbox()
+  const { visible, hiddenCount, dismiss, dismissAll, restore } = inbox
   const announcements = useRows('announcements').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
   const [editing, setEditing] = useState<Announcement | null>(null)
+  // Ao abrir: o contador zera e o que era novo ganha um pontinho até fechar.
+  const [fresh, setFresh] = useState<string[]>([])
+  const latest = useRef(inbox)
+  latest.current = inbox
+  useEffect(() => {
+    if (!open) return
+    const { visible: now, seen, markSeen } = latest.current
+    const ids = now.map((i) => i.id)
+    setFresh(ids.filter((id) => !seen.includes(id)))
+    markSeen(ids)
+  }, [open])
+
   return (
-    <Sheet open={open} onClose={onClose} title={me ? `Para você, ${firstName(me.name)}` : 'Para você'} description="Seus lembretes, pendências e os avisos da liderança." size="lg">
+    <Sheet open={open} onClose={onClose} title={me ? `Para você, ${firstName(me.name)}` : 'Notificações'} size="lg">
       <div className="space-y-3">
-        {items.map((it, i) => (
-          <div key={it.id} className={cn(dismissed.includes(it.id) && 'opacity-60')} onClick={(e) => (e.target as HTMLElement).closest('a') && onClose()}>
-            <InboxCard item={it} index={i} compact />
+        {visible.length > 0 ? (
+          <div className="flex items-center justify-between gap-2 px-1">
+            <span className="text-[13px] font-semibold text-muted">{visible.length === 1 ? '1 notificação' : `${visible.length} notificações`}</span>
+            <Button
+              size="sm"
+              variant="ghost"
+              icon={Trash2}
+              onClick={async () => {
+                if (await confirm({ title: 'Limpar todas as notificações?', confirmLabel: 'Limpar tudo' })) dismissAll()
+              }}
+            >
+              Limpar tudo
+            </Button>
           </div>
-        ))}
-        {dismissed.length > 0 && (
+        ) : (
+          <div className="flex flex-col items-center gap-2 px-6 py-10 text-center">
+            <span className="grid size-12 place-items-center rounded-2xl bg-mint text-mint-ink">
+              <BellOff className="size-6" />
+            </span>
+            <p className="text-[15px] font-bold text-ink">Nenhuma notificação</p>
+          </div>
+        )}
+        <AnimatePresence initial={false} mode="popLayout">
+          {visible.map((it, i) => (
+            <motion.div key={it.id} layout exit={{ opacity: 0, x: 60, transition: { duration: 0.18 } }} onClick={(e) => (e.target as HTMLElement).closest('a') && onClose()}>
+              <InboxCard item={it} index={i} compact fresh={fresh.includes(it.id)} onDismiss={() => dismiss(it.id)} />
+            </motion.div>
+          ))}
+        </AnimatePresence>
+        {hiddenCount > 0 && (
           <button type="button" onClick={restore} className="w-full py-2 text-center text-[13px] font-bold text-primary">
-            Mostrar de novo os avisos dispensados no início
+            Mostrar as excluídas ({hiddenCount})
           </button>
         )}
         {isAdmin && (
@@ -479,7 +538,7 @@ function InboxSheet({ open, onClose, onCompose }: { open: boolean; onClose: () =
               </Button>
             </div>
             {announcements.length === 0 ? (
-              <p className="px-1 pb-1 text-[13px] text-muted">Nenhum aviso. Publique lembretes para toda a equipe ou só para algumas pessoas.</p>
+              <p className="px-1 pb-1 text-[13px] text-muted">Nenhum aviso publicado.</p>
             ) : (
               <div className="divide-y divide-line">
                 {announcements.map((a) => {
@@ -570,7 +629,6 @@ export function AnnouncementSheet({ open, onClose, announcement }: { open: boole
       open={open}
       onClose={onClose}
       title={announcement ? 'Editar aviso' : 'Novo aviso'}
-      description="Aparece no topo do app, no painel “Para você” de quem você escolher."
       size="lg"
       footer={
         <Button
@@ -677,7 +735,7 @@ export function AnnouncementSheet({ open, onClose, announcement }: { open: boole
             {(id) => <Input id={id} type="date" value={endsOn} onChange={(e) => setEndsOn(e.target.value)} />}
           </Field>
           <div className="sm:pt-6">
-            <Switch checked={pinned} onChange={setPinned} label="Fixar no topo" description="Aparece antes dos lembretes" />
+            <Switch checked={pinned} onChange={setPinned} label="Fixar no topo" />
           </div>
         </div>
       </div>
