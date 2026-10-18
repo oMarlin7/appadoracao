@@ -45,7 +45,8 @@ import { EXAMPLE_TAG, buildSeedSongs } from '@/data/songs'
 import { useDocumentTitle, useTeam } from '@/lib/hooks'
 import { getData, useIsAdmin, useMe, useRows, useSettings, type ThemePref } from '@/lib/store'
 import { PASTELS, ROLES, ROLE_BY_ID } from '@/lib/taxonomy'
-import { pickFile, squareImageDataUrl } from '@/lib/images'
+import { pickFile } from '@/lib/images'
+import { cropImage } from '@/components/image-cropper'
 import { cn, copyText, downloadFile, firstName, plural, todayString } from '@/lib/utils'
 import { MAX_VOTING_PICKS } from '@/lib/voting'
 
@@ -67,9 +68,10 @@ export function ProfilePage() {
   const choosePhoto = async () => {
     const file = await pickFile('image/*')
     if (!file) return
-    setPhotoBusy(true)
     try {
-      const avatarUrl = await squareImageDataUrl(file, 320)
+      const avatarUrl = await cropImage(file, { shape: 'circle', size: 400, title: 'Ajustar foto de perfil' })
+      if (!avatarUrl) return
+      setPhotoBusy(true)
       if (await updateMyProfile({ avatarUrl })) toast.success('Foto atualizada')
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Não foi possível usar esta foto')

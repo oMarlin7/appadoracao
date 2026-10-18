@@ -27,7 +27,8 @@ import { Card, Chip, Field, Input, Segmented, Select, Textarea } from '@/compone
 import { Sheet, confirm } from '@/components/ui/sheet'
 import { newSong, saveSong } from '@/lib/actions'
 import { useDocumentTitle, useThemes } from '@/lib/hooks'
-import { pickFile, squareImageDataUrl } from '@/lib/images'
+import { pickFile } from '@/lib/images'
+import { cropImage } from '@/components/image-cropper'
 import { SmartImport } from '@/components/smart-import'
 import { chordSearchUrl, extractMediaLinks, parseMediaUrl, youtubeThumb, type MediaLink } from '@/lib/media'
 import { detectKeyFromText, tempoFromBpm } from '@/lib/music/analyze'
@@ -319,7 +320,8 @@ export function SongEditorPage() {
     const file = await pickFile('image/*')
     if (!file) return
     try {
-      set('coverUrl', await squareImageDataUrl(file, 360))
+      const coverUrl = await cropImage(file, { shape: 'rounded', size: 480, title: 'Ajustar capa' })
+      if (coverUrl) set('coverUrl', coverUrl)
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Não foi possível usar esta imagem')
     }

@@ -7,6 +7,7 @@ import { AppLayout } from './components/layout'
 import { LogoMark } from './components/logo'
 import { Button } from './components/ui/button'
 import { ConfirmHost } from './components/ui/sheet'
+import { ImageCropHost } from './components/image-cropper'
 import { backend } from './lib/backend'
 import { errorMessage } from './lib/actions'
 import { useData, useMe, useSession, useSettings } from './lib/store'
@@ -242,6 +243,7 @@ export function App() {
     <>
       <RouterProvider router={router} />
       <ConfirmHost />
+      <ImageCropHost />
       <PwaUpdater />
       <Toaster
         position="top-center"

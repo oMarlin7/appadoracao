@@ -1,9 +1,9 @@
 /**
- * Fotos escolhidas no aparelho viram imagens pequenas (quadradas, JPEG) antes de salvar:
- * cabem no banco junto com o perfil/música e funcionam offline.
+ * Fotos escolhidas no aparelho passam pelo recorte (components/image-cropper) e viram imagens
+ * pequenas (quadradas, JPEG) antes de salvar: cabem no banco junto com o perfil/música e funcionam offline.
  */
 
-function loadImage(file: Blob): Promise<HTMLImageElement> {
+export function loadImage(file: Blob): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const url = URL.createObjectURL(file)
     const img = new Image()
@@ -19,20 +19,16 @@ function loadImage(file: Blob): Promise<HTMLImageElement> {
   })
 }
 
-/** Recorta no centro e reduz para `size`×`size`. */
-export async function squareImageDataUrl(file: Blob, size = 256, quality = 0.82): Promise<string> {
-  if (!file.type.startsWith('image/')) throw new Error('Escolha um arquivo de imagem.')
-  const img = await loadImage(file)
-  const side = Math.min(img.naturalWidth, img.naturalHeight)
-  if (!side) throw new Error('Imagem vazia.')
+/** Recorta o quadrado escolhido (em pixels da foto) e reduz para no máximo `size`×`size`. */
+export function cropToDataUrl(img: HTMLImageElement, area: { x: number; y: number; side: number }, size = 320, quality = 0.85): string {
   const canvas = document.createElement('canvas')
-  const out = Math.min(size, side)
+  const out = Math.max(1, Math.round(Math.min(size, area.side)))
   canvas.width = out
   canvas.height = out
   const ctx = canvas.getContext('2d')
   if (!ctx) throw new Error('Seu navegador não conseguiu processar a imagem.')
   ctx.imageSmoothingQuality = 'high'
-  ctx.drawImage(img, (img.naturalWidth - side) / 2, (img.naturalHeight - side) / 2, side, side, 0, 0, out, out)
+  ctx.drawImage(img, area.x, area.y, area.side, area.side, 0, 0, out, out)
   return canvas.toDataURL('image/jpeg', quality)
 }
 
