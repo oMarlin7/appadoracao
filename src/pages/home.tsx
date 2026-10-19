@@ -3,6 +3,7 @@ import { Link } from 'react-router'
 import { ArrowRight, CalendarPlus, ChevronRight, MessageCircle, Play, Plus, Sparkles, ThumbsUp } from 'lucide-react'
 import { Avatar, AvatarStack } from '@/components/avatar'
 import { ForYouPanel } from '@/components/for-you'
+import { PushPrompt } from '@/components/push-settings'
 import { HeaderAvatar, Page } from '@/components/layout'
 import { SongCard, SongCover, SongRow, ThemeTile } from '@/components/song-bits'
 import { LinkButton } from '@/components/ui/button'
@@ -250,6 +251,7 @@ export function HomePage() {
 
       <div className="grid grid-cols-1 gap-8 lg:grid-cols-[minmax(0,1fr)_360px] lg:gap-10">
         <div className="min-w-0 space-y-8">
+          <PushPrompt />
           <ForYouPanel />
 
           {next ? (

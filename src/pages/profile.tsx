@@ -47,6 +47,7 @@ import { getData, useIsAdmin, useMe, useRows, useSettings, type ThemePref } from
 import { PASTELS, ROLES, ROLE_BY_ID } from '@/lib/taxonomy'
 import { pickFile } from '@/lib/images'
 import { cropImage } from '@/components/image-cropper'
+import { PushCard } from '@/components/push-settings'
 import { cn, copyText, downloadFile, firstName, plural, todayString } from '@/lib/utils'
 import { MAX_VOTING_PICKS } from '@/lib/voting'
 
@@ -182,6 +183,8 @@ export function ProfilePage() {
           </Card>
         ))}
       </div>
+
+      <PushCard className="mt-5" />
 
       <Card className="mt-5 divide-y divide-line">
         {[

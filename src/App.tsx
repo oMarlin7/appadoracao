@@ -10,6 +10,7 @@ import { ConfirmHost } from './components/ui/sheet'
 import { ImageCropHost } from './components/image-cropper'
 import { backend } from './lib/backend'
 import { errorMessage } from './lib/actions'
+import { syncPush } from './lib/push'
 import { useData, useMe, useSession, useSettings } from './lib/store'
 import { signOut } from './lib/auth'
 import { startSync, stopSync } from './lib/sync'
@@ -84,6 +85,7 @@ function useAuthBootstrap() {
     }
     useData.getState().setError(null)
     startSync(userId).catch((e) => useData.getState().setError(errorMessage(e)))
+    void syncPush().catch(() => {})
     return () => stopSync()
   }, [userId])
 }

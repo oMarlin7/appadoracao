@@ -32,6 +32,8 @@ export default defineConfig({
       },
       workbox: {
         globPatterns: ['**/*.{js,css,html,svg,png,woff2}'],
+        // Recebe as notificações no celular (public/push-sw.js).
+        importScripts: ['push-sw.js'],
         navigateFallback: '/index.html',
       },
     }),

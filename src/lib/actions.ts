@@ -451,7 +451,7 @@ export async function deleteMessage(id: Id) {
 // Perfil, equipe e configurações
 // ---------------------------------------------------------------------------
 
-export async function updateMyProfile(patch: Partial<Pick<Profile, 'name' | 'functions' | 'color' | 'bio' | 'avatarUrl'>>) {
+export async function updateMyProfile(patch: Partial<Pick<Profile, 'name' | 'functions' | 'color' | 'bio' | 'avatarUrl' | 'notifyPrefs'>>) {
   const p = getData().profiles[me()]
   if (!p) return false
   return save('profiles', { ...p, ...patch, updatedAt: nowIso() })

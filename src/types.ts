@@ -13,6 +13,8 @@ export interface Profile {
   bio: string
   /** Foto de perfil (imagem pequena já reduzida no aparelho, em data URL). */
   avatarUrl?: string | null
+  /** Notificações no celular que a pessoa desligou (o que não está como false fica ligado). */
+  notifyPrefs?: Partial<Record<'escala' | 'votacao' | 'setlist' | 'ensaio' | 'avisos', boolean>> | null
   createdAt: string
   updatedAt: string
 }

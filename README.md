@@ -51,6 +51,7 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 **Para você — o painel de cada membro**
 - No topo do início (e no 🔔 em qualquer tela), cada pessoa vê lembretes **só seus, chamando pelo nome**: que está na escala (com botão para confirmar presença), o ensaio da semana, a votação aberta (com contagem regressiva), um convite para sugerir música, o resultado da votação, faltas sem justificativa, **parabéns pela frequência alta** ou um carinho quando a frequência cai — com anéis de progresso, capas, avatares e animações.
 - O contador do 🔔 mostra só o que é novo e **zera ao abrir**. Cada um **exclui** as notificações que quiser (uma a uma ou *Limpar tudo*) e pode trazê-las de volta; isso vale em todos os aparelhos da pessoa.
+- **Notificações no celular** (as que aparecem na tela de bloqueio): quando a pessoa entra na **escala**, quando a **votação** abre e nas últimas horas (só para quem não votou), quando o **setlist** fica pronto ou muda, no **dia do ensaio** e quando o líder publica um **aviso**. Chamam pelo nome, abrem a página certa ao tocar e, no Android, vêm com uma arte de cada tipo. Cada membro escolhe o que quer receber em **Perfil → Notificações no celular** (com botão de teste); entre 22h e 7h nada toca — chega às 7h. No iPhone funcionam com o app instalado na tela de início (iOS 16.4 ou mais novo).
 - O líder vê também as pendências dele (quem não confirmou, quem avisou ausência na escala, setlist vazio, sugestões esperando) e **publica avisos** para a equipe toda, para funções (ex.: só as vozes) ou para pessoas específicas.
 
 **Equipe**
@@ -88,14 +89,14 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 
 ### 1. Criar o banco no Supabase
 1. Crie uma conta em supabase.com → **New project** (região *South America (São Paulo)*).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) depois com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase) e, por último, com [`supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql`](supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql) (salvar o próprio perfil, votação com qualquer número de músicas, encerrar na hora e notificações excluídas).
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) depois com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase) e, por último, com [`supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql`](supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql) (salvar o próprio perfil, votação com qualquer número de músicas, encerrar na hora e notificações excluídas). Para as notificações no celular, rode também [`…_v6_notificacoes.sql`](supabase/migrations/20261021000000_v6_notificacoes.sql) e [`…_v6_agendador.sql`](supabase/migrations/20261021000100_v6_agendador.sql) (veja *Notificações no celular* abaixo).
 3. Em **Project Settings → API Keys**, copie a **Project URL** e a chave **publishable** (`sb_publishable_…`). Ela é pública: pode ir para o navegador sem problema, quem protege os dados são as regras do banco. (A chave *anon* antiga também funciona, mas o Supabase vai desligá-la no fim de 2026.)
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
 5. Em **Authentication → Sign In / Providers → Email**, desligue *Confirm email*. Sem um servidor de e-mail próprio (SMTP), o Supabase só entrega e-mails para quem é da organização no painel do Supabase, então a confirmação não chegaria aos membros. O código de convite continua protegendo o cadastro. Se um dia quiser confirmação de e-mail e "esqueci minha senha" funcionando para todos, configure um SMTP (ex.: [Resend](https://resend.com/docs/send-with-supabase-smtp), que tem plano gratuito) em **Authentication → Emails → SMTP Settings**.
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
 
-> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql`, `…_v4_seguranca.sql` e/ou `…_v5_perfil_votacao_avisos.sql`). Até lá o app continua funcionando, mas sem as funções novas.
+> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql`, `…_v4_seguranca.sql`, `…_v5_perfil_votacao_avisos.sql` e/ou os dois `…_v6_…`). Até lá o app continua funcionando, mas sem as funções novas.
 
 ### 2. Publicar o app
 **Vercel**: *Add New → Project* → importe este repositório → em *Environment Variables* adicione:
@@ -129,6 +130,12 @@ supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 ```
 
 A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts). Ela só atende membros logados e nunca baixa nem escreve letras ou cifras. A busca usa o catálogo público do [Deezer](https://developers.deezer.com).
+
+### Notificações no celular
+1. Publique a função: `supabase functions deploy notificar --no-verify-jwt`.
+2. Rode as migrações `…_v6_notificacoes.sql` e `…_v6_agendador.sql`. Num projeto que não seja o nosso, troque antes, em `…_v6_notificacoes.sql`, o endereço da função (`function_url`) pelo do seu projeto.
+
+Pronto: o banco chama a função a cada minuto e ela envia só o que for novo. As chaves de envio (VAPID) são criadas sozinhas na primeira vez e ficam guardadas no banco, sem acesso pelo app. Não há custo: as notificações usam o serviço gratuito do próprio celular (Google no Android, Apple no iPhone). As artes ficam em [`public/notificacoes`](public/notificacoes).
 
 ### 3. Chamar a equipe
 1. **O líder cria a conta primeiro** — o primeiro cadastro vira líder automaticamente.
@@ -201,19 +208,21 @@ src/
   lib/events.ts    tipos de evento (apresentação × ensaio/reunião)
   lib/voting.ts    regra da votação (quinta 12h → sábado 12h), apuração e desempate
   lib/inbox.ts     painel "Para você": lembretes e avisos de cada membro
+  lib/push.ts      notificações no celular: ativar no aparelho, preferências e teste
   pages/           telas
   components/      componentes visuais (cifra, capas, sheets, layout…)
   data/            músicas iniciais e equipe de demonstração
-supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2, v3, v4 e v5)
-supabase/functions/   função importar-musica (busca pelo nome, dados dos links e ficha com IA)
+public/push-sw.js     recebe e mostra as notificações (carregado pelo service worker)
+supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2 a v6)
+supabase/functions/   importar-musica (busca pelo nome, links e ficha com IA) e notificar (regras e envio das notificações)
 ```
 
-**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (perfil, favoritas, mensagens, playlists, preferências, notificações excluídas, a própria presença); as músicas e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; **só o líder coloca, tira ou reordena músicas do setlist e aceita sugestões** (o banco recusa de outros membros); cada um vota em até N músicas, só enquanto a votação está aberta, e só em músicas sugeridas; o resultado é aplicado por uma função do banco que confere prazo e votos; avisos direcionados só chegam a quem foi escolhido; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder.
+**Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (perfil, favoritas, mensagens, playlists, preferências, notificações excluídas, a própria presença); as músicas e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; **só o líder coloca, tira ou reordena músicas do setlist e aceita sugestões** (o banco recusa de outros membros); cada um vota em até N músicas, só enquanto a votação está aberta, e só em músicas sugeridas; o resultado é aplicado por uma função do banco que confere prazo e votos; avisos direcionados só chegam a quem foi escolhido; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder; cada aparelho só recebe as notificações de quem está logado nele, e as chaves de envio ficam fora do alcance do app.
 
 ## Próximos passos sugeridos
 
 - **IA conversacional no assistente**: uma Edge Function do Supabase recebe o pedido em linguagem natural e o catálogo (títulos, temas, momentos, significados) e devolve as músicas escolhidas. O assistente atual (`recommend` e `parseRequest`) continua como base e funciona sem internet.
-- Notificações push (novo culto, escala, menções no chat).
+- Notificações de menções no chat.
 - Diagramas de acordes para violão e teclado.
 - Estatísticas do ano (músicas mais tocadas, quem mais ministrou).
 - Multitracks por música (voz, base, click separados).
