@@ -78,10 +78,18 @@ def download(req: DownloadRequest, _=Depends(auth)):
                 "quiet": True,
                 "no_warnings": True,
                 "socket_timeout": 30,
+                "extractor_args": {"youtube": {"player_client": ["android", "ios", "mweb", "tv_embedded"]}},
                 "postprocessors": [
                     {"key": "FFmpegExtractAudio", "preferredcodec": fmt, "preferredquality": quality}
                 ],
             }
+            # Cookies do navegador ajudam quando o YouTube bloqueia IP de datacenter.
+            cookies = os.environ.get("YOUTUBE_COOKIES", "").strip()
+            if cookies:
+                cookie_path = os.path.join(tmp, "cookies.txt")
+                with open(cookie_path, "w", encoding="utf-8") as f:
+                    f.write(cookies)
+                opts["cookiefile"] = cookie_path
             with yt_dlp.YoutubeDL(opts) as ydl:
                 info = ydl.extract_info(url, download=True)
 
