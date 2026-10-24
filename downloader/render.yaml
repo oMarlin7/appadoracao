@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: baixador
+    runtime: docker
+    plan: free
+    healthCheckPath: /
+    envVars:
+      - key: DOWNLOADER_SECRET
+        generateValue: true
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: BUCKET
+        value: ensaios
+      - key: AUDIO_FORMAT
+        value: mp3
