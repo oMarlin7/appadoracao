@@ -68,36 +68,43 @@ def download(req: DownloadRequest, _=Depends(auth)):
     # MP3 em 320 kbps (boa qualidade para separação de stems depois); wav/flac são lossless.
     quality = "320" if fmt == "mp3" else "0"
 
-    with tempfile.TemporaryDirectory() as tmp:
-        outtmpl = os.path.join(tmp, "audio.%(ext)s")
-        opts = {
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "noplaylist": True,
-            "quiet": True,
-            "no_warnings": True,
-            "socket_timeout": 30,
-            "postprocessors": [
-                {"key": "FFmpegExtractAudio", "preferredcodec": fmt, "preferredquality": quality}
-            ],
-        }
-        with yt_dlp.YoutubeDL(opts) as ydl:
-            info = ydl.extract_info(url, download=True)
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            outtmpl = os.path.join(tmp, "audio.%(ext)s")
+            opts = {
+                "format": "bestaudio/best",
+                "outtmpl": outtmpl,
+                "noplaylist": True,
+                "quiet": True,
+                "no_warnings": True,
+                "socket_timeout": 30,
+                "postprocessors": [
+                    {"key": "FFmpegExtractAudio", "preferredcodec": fmt, "preferredquality": quality}
+                ],
+            }
+            with yt_dlp.YoutubeDL(opts) as ydl:
+                info = ydl.extract_info(url, download=True)
 
-        files = glob.glob(os.path.join(tmp, f"audio.{fmt}"))
-        if not files:
-            files = [f for f in glob.glob(os.path.join(tmp, "audio.*")) if not f.endswith((".part", ".ytdl", ".webm", ".m4a"))]
-        if not files:
-            raise HTTPException(status_code=500, detail="não foi possível converter o áudio")
+            files = glob.glob(os.path.join(tmp, f"audio.{fmt}"))
+            if not files:
+                files = [f for f in glob.glob(os.path.join(tmp, "audio.*")) if not f.endswith((".part", ".ytdl", ".webm", ".m4a"))]
+            if not files:
+                raise HTTPException(status_code=500, detail="não foi possível converter o áudio")
 
-        path = files[0]
-        title = (info.get("title") or "audio").strip()
-        key = f"musicas/{safe(title)}-{uuid.uuid4().hex[:8]}.{fmt}"
-        upload(path, key, MIME[fmt])
-        return {
-            "storagePath": key,
-            "mimeType": MIME[fmt],
-            "title": title,
-            "durationSec": info.get("duration"),
-            "sizeBytes": os.path.getsize(path),
-        }
+            path = files[0]
+            title = (info.get("title") or "audio").strip()
+            key = f"musicas/{safe(title)}-{uuid.uuid4().hex[:8]}.{fmt}"
+            upload(path, key, MIME[fmt])
+            return {
+                "storagePath": key,
+                "mimeType": MIME[fmt],
+                "title": title,
+                "durationSec": info.get("duration"),
+                "sizeBytes": os.path.getsize(path),
+            }
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"{type(e).__name__}: {e}")
