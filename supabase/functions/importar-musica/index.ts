@@ -1,13 +1,18 @@
 // Supabase Edge Function · importar-musica
 //
-// Ações, chamadas pelo app (só membros logados):
-//   { action: 'buscar', q }        → vídeos do YouTube (título, canal, capa, duração); Deezer e iTunes só
-//                                     quando o YouTube não responde
-//   { action: 'completar', … }     → ficha da música escolhida: vídeo oficial, Spotify, página da cifra,
-//                                     tom, BPM, compasso, ritmo, temas, momentos, significado, referências
-//                                     bíblicas, notas de arranjo (Claude com busca na web) e a cifra+letra
-//                                     extraídas da página citada (extrair-cifra.ts)
+// Ações, chamadas pelo app (só membros logados, menos 'status'):
+//   { action: 'buscar', q }        → vídeos do YouTube (título, canal, capa, duração) e, junto, as faixas
+//                                     do Deezer para a mesma busca (o app tira delas o nome certo da música
+//                                     e a prévia de 30 s); Deezer e iTunes no lugar só quando o YouTube
+//                                     não responde
+//   { action: 'completar', … }     → ficha da música escolhida: o nome como está no Cifra Club, a cifra+letra
+//                                     da página achada pela busca do site (extrair-cifra.ts) e, com a chave
+//                                     da IA, vídeo oficial, Spotify, tom, BPM, compasso, ritmo, temas,
+//                                     momentos, significado, referências bíblicas e notas de arranjo
+//                                     (Claude com busca na web)
 //   { action: 'cifra', … }         → só a cifra+letra de uma música (título, artista e, se houver, o link)
+//   { action: 'status' }           → o que está ligado no servidor (chave da IA, chave do YouTube); a
+//                                     única ação que não pede login
 //   { action: 'metadata', url }    → título, artista, capa e duração de um link do YouTube/Spotify
 //   { action: 'analisar', … }      → ficha a partir da letra que o membro colou
 //
@@ -24,7 +29,7 @@
 // o conteúdo (ex.: CCLI) é do ministério — a mesma que vale para o texto colado à mão.
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.135.0'
-import { fetchSheet } from './extrair-cifra.ts'
+import { fetchSheet, findCifraPages, sheetFromPage, type CifraPage } from './extrair-cifra.ts'
 
 const MODEL = 'claude-opus-5-5'
 
@@ -136,7 +141,7 @@ const cleanKey = (k: string | null) => {
 const plausibleBpm = (n: number | null | undefined) => (n && n >= 40 && n <= 220 ? Math.round(n) : null)
 
 // ---------------------------------------------------------------------------
-// Busca por nome (catálogo do Deezer; iTunes se o Deezer não responder)
+// Busca por nome (YouTube; catálogo do Deezer e iTunes quando ele não responde)
 // ---------------------------------------------------------------------------
 
 interface Candidate {
@@ -180,9 +185,9 @@ function fromDeezer(t: DeezerTrack): Candidate {
   }
 }
 
-async function searchDeezer(q: string): Promise<Candidate[]> {
+async function searchDeezer(q: string, limit = 15): Promise<Candidate[]> {
   // Erros do Deezer chegam com HTTP 200 e um objeto "error".
-  const r = await fetchJson<{ data?: DeezerTrack[]; error?: { message?: string } }>(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=15`)
+  const r = await fetchJson<{ data?: DeezerTrack[]; error?: { message?: string } }>(`https://api.deezer.com/search?q=${encodeURIComponent(q)}&limit=${limit}`)
   if (r.error || !Array.isArray(r.data)) throw new Error(r.error?.message ?? 'Deezer indisponível')
   return r.data.map(fromDeezer)
 }
@@ -266,12 +271,17 @@ async function search(q: string) {
   // O YouTube vem primeiro. Deezer e iTunes só se ele não responder (sem chave, cota do dia no fim…).
   const ytKey = Deno.env.get('YOUTUBE_API_KEY')
   if (ytKey) {
-    try {
-      const results = dedupe(await searchYouTube(query, ytKey))
-      if (results.length) return { results, source: 'youtube' }
-    } catch (e) {
-      console.warn('[busca] YouTube não respondeu:', e instanceof Error ? e.message : e)
-    }
+    // As faixas do Deezer vêm junto: dão o nome certo de cada vídeo e a prévia de 30 s.
+    const [videos, catalog] = await Promise.all([
+      searchYouTube(query, ytKey).catch((e): Candidate[] => {
+        console.warn('[busca] YouTube não respondeu:', e instanceof Error ? e.message : e)
+        return []
+      }),
+      searchDeezer(query, 25).catch((): Candidate[] => []),
+    ])
+    const results = dedupe(videos)
+    if (results.length) return { results, catalog, source: 'youtube' }
+    if (catalog.length) return { results: dedupe(catalog), source: 'deezer' }
   }
   try {
     return { results: dedupe(await searchDeezer(query)), source: 'deezer' }
@@ -298,6 +308,8 @@ interface CatalogItem {
 
 interface CompleteInput {
   id?: string
+  /** Faixa do Deezer que corresponde ao vídeo escolhido ('deezer:123'), para o BPM e o ano. */
+  catalogId?: string | null
   title?: string
   artist?: string
   album?: string | null
@@ -386,7 +398,7 @@ const chosenVideo = (input: CompleteInput) => {
   return id ? `https://www.youtube.com/watch?v=${id}` : null
 }
 
-async function research(input: CompleteInput, apiKey: string): Promise<Research> {
+async function research(input: CompleteInput, apiKey: string, cifraUrl: string | null): Promise<Research> {
   const client = new Anthropic({ apiKey })
   const deadline = Date.now() + RESEARCH_BUDGET_MS
   const themes = input.themes ?? []
@@ -398,6 +410,7 @@ async function research(input: CompleteInput, apiKey: string): Promise<Research>
     input.album ? `Álbum: ${clean(input.album)}` : null,
     mmss(input.durationSec) ? `Duração: ${mmss(input.durationSec)}` : null,
     video ? `Vídeo do YouTube escolhido pela equipe (use este em youtubeUrl; não procure outro): ${video}` : null,
+    cifraUrl ? `Página da cifra, já encontrada (use esta em cifraUrl; não procure outra): ${cifraUrl}` : null,
   ]
     .filter(Boolean)
     .join('\n')
@@ -460,26 +473,44 @@ function aiError(e: unknown): string {
   return 'falhou'
 }
 
+/** A função do Supabase é encerrada aos 150 s: a ficha inteira (busca, IA e cifra) cabe nisso. */
+const COMPLETE_BUDGET_MS = 140_000
+
 async function complete(input: CompleteInput) {
   const title = clean(input.title)
   if (!title) return { error: 'sem título' }
-  const deezerId = /^deezer:(\d+)$/.exec(input.id ?? '')?.[1]
+  const deadline = Date.now() + COMPLETE_BUDGET_MS
+  const deezerId = /^deezer:(\d+)$/.exec(input.catalogId ?? input.id ?? '')?.[1]
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
   const themeIds = new Set((input.themes ?? []).map((t) => t.id))
   const momentIds = new Set((input.moments ?? []).map((m) => m.id))
 
-  const [track, ai] = await Promise.all([
+  // O nome certo vem da busca do Cifra Club: corrige "Música - Artista" lido ao contrário e tira
+  // "(Ao Vivo)", "Ato 3 - 04"… do título do vídeo, antes da pesquisa e da cifra.
+  const pages: CifraPage[] = await findCifraPages(title, clean(input.artist)).catch(() => [])
+  const name = pages[0] ? { title: pages[0].title, artist: pages[0].artist } : { title, artist: clean(input.artist) }
+
+  // Cifra, catálogo e pesquisa ao mesmo tempo: a cifra não espera a IA.
+  const [sheetFound, track, ai] = await Promise.all([
+    fetchSheet(name.title, name.artist, { pages }).catch(() => null),
     deezerId ? deezerTrack(deezerId).catch(() => null) : Promise.resolve(null),
-    apiKey ? research(input, apiKey).catch((e): Research => ({ error: aiError(e) })) : Promise.resolve<Research>({ error: 'sem-chave' }),
+    apiKey
+      ? research({ ...input, ...name }, apiKey, pages[0]?.url ?? null).catch((e): Research => ({ error: aiError(e) }))
+      : Promise.resolve<Research>({ error: 'sem-chave' }),
   ])
 
-  const base = { ia: false, year: track?.year ?? null, bpm: track?.bpm ?? null }
+  const base = { ia: false, year: track?.year ?? null, bpm: track?.bpm ?? null, title: pages[0]?.title ?? null, artist: pages[0]?.artist ?? null }
   const f = 'error' in ai ? null : ai.ficha
   const aiErr = 'error' in ai ? ai.error : null
+  if (aiErr) console.warn(`[ficha] IA: ${aiErr}`)
   const sources = 'error' in ai ? [] : ai.sources
 
-  // Cifra e letra: extrai o texto da página citada pela IA (ou tenta adivinhar a página).
-  const sheet = await fetchSheet(title, clean(input.artist), f?.cifraUrl ? safeUrl(f.cifraUrl) : null).catch(() => null)
+  // A busca não achou a cifra (ou só a letra) e a IA citou outra página: tenta essa página.
+  let sheet = sheetFound
+  const cited = f?.cifraUrl ? safeUrl(f.cifraUrl) : null
+  const left = deadline - Date.now()
+  if (cited && (!sheet || sheet.source === 'lrclib') && !pages.some((p) => p.url === cited) && left > 8000)
+    sheet = (await sheetFromPage(cited, Math.min(25_000, left - 3000)).catch(() => null)) ?? sheet
 
   if (!f) return { ...base, aiError: aiErr, content: sheet?.content ?? null, sourceUrl: sheet?.sourceUrl ?? null }
 
@@ -489,7 +520,7 @@ async function complete(input: CompleteInput) {
     ia: true,
     youtubeUrl,
     spotifyUrl,
-    cifraUrl: safeUrl(f.cifraUrl),
+    cifraUrl: sheet?.sourceUrl ?? safeUrl(f.cifraUrl),
     originalKey: cleanKey(f.originalKey) ?? sheet?.originalKey ?? null,
     // O BPM do Deezer às vezes vem dobrado ou pela metade; o da pesquisa vem primeiro.
     bpm: plausibleBpm(f.bpm) ?? base.bpm,
@@ -640,9 +671,17 @@ async function analyze(input: AnalyzeInput) {
 async function buscarCifra(input: { title?: string; artist?: string; cifraUrl?: string | null }) {
   const title = clean(input.title)
   if (!title) return { error: 'sem título' }
-  const sheet = await fetchSheet(title, clean(input.artist), safeUrl(input.cifraUrl ?? null))
+  const sheet = await fetchSheet(title, clean(input.artist), { cifraUrl: safeUrl(input.cifraUrl ?? null) })
   if (!sheet) return { error: 'não encontrada' }
-  return { content: sheet.content, originalKey: sheet.originalKey, bpm: sheet.bpm, source: sheet.source, sourceUrl: sheet.sourceUrl }
+  return {
+    content: sheet.content,
+    originalKey: sheet.originalKey,
+    bpm: sheet.bpm,
+    source: sheet.source,
+    sourceUrl: sheet.sourceUrl,
+    title: sheet.title,
+    artist: sheet.artist,
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -651,8 +690,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
   if (req.method !== 'POST') return json({ error: 'método não permitido' }, 405)
   try {
-    if (!(await signedIn(req))) return json({ error: 'entre na sua conta' }, 401)
     const body = await req.json()
+    // Só diz o que está ligado (sem chamar nada lá fora), então não precisa de login.
+    if (body.action === 'status') return json({ ia: !!Deno.env.get('ANTHROPIC_API_KEY'), youtube: !!Deno.env.get('YOUTUBE_API_KEY') })
+    if (!(await signedIn(req))) return json({ error: 'entre na sua conta' }, 401)
     if (body.action === 'buscar') return json(await search(String(body.q ?? '')))
     if (body.action === 'completar') return json(await complete(body as CompleteInput))
     if (body.action === 'metadata') {

@@ -5,7 +5,6 @@ import {
   ChevronDown,
   ClipboardPaste,
   Eye,
-  FileText,
   ImagePlus,
   ListPlus,
   Loader2,
@@ -16,7 +15,6 @@ import {
   Search,
   Sparkles,
   Trash2,
-  Wand2,
 } from 'lucide-react'
 import { ChordSheet } from '@/components/chord-sheet'
 import { Page, TopBar } from '@/components/layout'
@@ -30,11 +28,11 @@ import { useDocumentTitle, useThemes } from '@/lib/hooks'
 import { pickFile } from '@/lib/images'
 import { cropImage } from '@/components/image-cropper'
 import { SmartImport } from '@/components/smart-import'
-import { chordSearchUrl, extractMediaLinks, parseMediaUrl, youtubeThumb, type MediaLink } from '@/lib/media'
+import { extractMediaLinks, parseMediaUrl, youtubeThumb, type MediaLink } from '@/lib/media'
 import { detectKeyFromText, tempoFromBpm } from '@/lib/music/analyze'
 import { docLyrics, parseSheet, transposeText } from '@/lib/music/sheet'
 import { allKeys, makeSpeller, normalizeKeyName, prettyAccidentals, transposeKey } from '@/lib/music/theory'
-import { analyzeImport, analyzeLocally, analyzeWithAI, aiAvailable, draftMeaning, fetchLinkMetadata, type ImportAnalysis, type LinkMetadata, type SongAnalysis } from '@/lib/song-import'
+import { analyzeImport, analyzeLocally, analyzeWithAI, aiAvailable, draftMeaning, fetchLinkMetadata, type LinkMetadata, type SongAnalysis } from '@/lib/song-import'
 import { fetchSongSheet } from '@/lib/cifra-search'
 import { isYouTubeCandidate, type SongCandidate, type SongDetails } from '@/lib/song-search'
 import { useRow, useSettings } from '@/lib/store'
@@ -124,9 +122,9 @@ export function SongEditorPage() {
   const [tagsText, setTagsText] = useState(() => (existing?.tags ?? []).join(', '))
   const [dirty, setDirty] = useState(false)
   const [saving, setSaving] = useState(false)
-  const [importOpen, setImportOpen] = useState(false)
-  const [autoPaste, setAutoPaste] = useState(false)
   const [fetchingSheet, setFetchingSheet] = useState(false)
+  /** Página de onde veio a cifra automática (para mostrar a fonte). */
+  const [sheetSource, setSheetSource] = useState<string | null>(null)
   const [batchOpen, setBatchOpen] = useState(false)
   const [themeSheet, setThemeSheet] = useState(false)
   const [allThemes, setAllThemes] = useState(false)
@@ -148,6 +146,7 @@ export function SongEditorPage() {
 
   const doc = useMemo(() => parseSheet(song.content), [song.content])
   const lyrics = useMemo(() => docLyrics(doc), [doc])
+  const hasChords = useMemo(() => hasSheetChords(doc), [doc])
   const themeSuggestions = useMemo(() => suggestThemes(`${song.title}\n${lyrics}`).filter((t) => !song.themes.includes(t)), [lyrics, song.title, song.themes])
   const momentSuggestions = useMemo(
     () => suggestMoments(song.themes.length ? song.themes : suggestThemes(lyrics), song.tempo).filter((m) => !song.moments.includes(m)),
@@ -224,7 +223,7 @@ export function SongEditorPage() {
     return a
   }
 
-  /** "Buscar cifra e letra": extrai do servidor e aplica direto. */
+  /** "Buscar cifra": extrai do servidor e aplica direto (com o nome da música como está no Cifra Club). */
   const autoFetchSheet = async () => {
     if (!song.title.trim()) return
     setFetchingSheet(true)
@@ -232,35 +231,44 @@ export function SongEditorPage() {
     setFetchingSheet(false)
     if (!r.ok) {
       toast.error(
-        r.reason === 'sem-servidor' ? 'A busca automática funciona com o app conectado ao servidor.' : 'Não encontrei a cifra automaticamente.',
-        { description: 'Você ainda pode abrir a página da cifra e colar o texto aqui.' },
+        r.reason === 'sem-servidor' ? 'A busca automática funciona com o app conectado ao servidor.' : 'Não encontrei a cifra desta música.',
+        r.reason === 'sem-servidor' ? undefined : { description: 'Confira o nome da música e do artista e busque de novo.' },
       )
       return
     }
     const a = analyzeImport(r.content)
     if (!a.content.trim()) {
-      toast.error('Não encontrei a cifra automaticamente.')
+      toast.error('Não encontrei a cifra desta música.')
       return
     }
+    const title = r.title || song.title
+    const artist = r.artist || song.artist
+    setSheetSource(r.sourceUrl)
     applyAuto(
       compactPatch({
+        title: r.title ?? undefined,
+        artist: r.artist ?? undefined,
         content: a.content,
         originalKey: a.key ? normalizeKeyName(a.key) : undefined,
         bpm: a.bpm ?? undefined,
         tempo: tempoFromBpm(a.bpm) ?? undefined,
       }),
     )
-    const host = r.sourceUrl ? (() => { try { return new URL(r.sourceUrl).hostname.replace(/^www\./, '') } catch { return null } })() : null
-    toast.success('Cifra e letra importadas', { description: compactJoin([host && `Fonte: ${host}`, a.key && `Tom ${a.key}`, a.chordCount ? `${a.chordCount} acordes` : null]) })
-    if (analysis.source !== 'ia') void runAnalysis({ title: song.title, artist: song.artist, content: a.content, bpm: song.bpm ?? a.bpm ?? null, tempo: song.tempo }, true)
+    toast.success(a.chordCount ? 'Cifra e letra importadas' : 'Letra importada', {
+      description: compactJoin([hostOf(r.sourceUrl) && `Fonte: ${hostOf(r.sourceUrl)}`, a.key && `Tom ${a.key}`, a.chordCount ? `${a.chordCount} acordes` : 'sem acordes']),
+    })
+    if (analysis.source !== 'ia') void runAnalysis({ title, artist, content: a.content, bpm: song.bpm ?? a.bpm ?? null, tempo: song.tempo }, true)
   }
 
   /** Ficha completa da busca pelo nome (sem IA: sugestões pelo título e o BPM do catálogo). */
   const applyDetails = (d: SongDetails | null, c: SongCandidate) => {
+    // O nome como está no Cifra Club vale mais que o lido do título do vídeo.
+    if (d?.title || d?.artist) applyAuto(compactPatch({ title: d.title ?? undefined, artist: d.artist ?? undefined }))
+    if (d?.content) setSheetSource(d.sourceUrl)
     if (!d?.ia) {
       if (d?.content) applyImportedSheet(d.content)
       if (d?.bpm) applyAuto({ bpm: d.bpm })
-      void runAnalysis({ title: c.title, artist: c.artist, content: d?.content ?? '', bpm: d?.bpm ?? null, tempo: null }, false)
+      void runAnalysis({ title: d?.title || c.title, artist: d?.artist || c.artist, content: d?.content ?? '', bpm: d?.bpm ?? null, tempo: null }, false)
       return
     }
     if (d.content) applyImportedSheet(d.content)
@@ -292,6 +300,7 @@ export function SongEditorPage() {
   /** "Escolher outra música": desfaz só o que foi preenchido automaticamente. */
   const clearAuto = () => {
     const blank = newSong()
+    setSheetSource(null)
     setSong((s) => {
       const next = { ...s }
       for (const [k, v] of Object.entries(auto.current) as Array<[keyof Song, unknown]>) {
@@ -305,36 +314,6 @@ export function SongEditorPage() {
     setRefsText((cur) => (cur === autoRefs.current ? '' : cur))
     autoRefs.current = ''
     setAnalysis({ state: 'idle' })
-  }
-
-  /** Abre o campo de colar já com o que estiver copiado (quando o aparelho deixa ler). */
-  const pasteCifra = () => {
-    setAutoPaste(true)
-    setImportOpen(true)
-  }
-
-  const applyCifra = (r: ImportAnalysis) => {
-    const next = {
-      title: song.title || r.title || '',
-      artist: song.artist || r.artist || '',
-      content: r.content,
-      bpm: song.bpm ?? r.bpm ?? null,
-      tempo: song.tempo,
-    }
-    setSong((s) => ({
-      ...s,
-      title: next.title,
-      artist: next.artist,
-      originalKey: r.key ? normalizeKeyName(r.key) : s.originalKey,
-      bpm: next.bpm,
-      tempo: s.tempo ?? tempoFromBpm(r.bpm),
-      content: r.content,
-    }))
-    setDirty(true)
-    setImportOpen(false)
-    toast.success('Cifra organizada', { description: compactJoin([r.key && `Tom ${r.key} (${r.keySource === 'texto' ? 'informado' : 'detectado'})`, `${r.chordCount} acordes`]) })
-    // A ficha da pesquisa (IA) vale mais que a sugestão pela letra.
-    if (analysis.source !== 'ia') void runAnalysis(next)
   }
 
   const save = async () => {
@@ -423,11 +402,9 @@ export function SongEditorPage() {
                 )
               }
               onReset={clearAuto}
-              onPasteCifra={() => void pasteCifra()}
-              onOpenPaste={() => {
-                setAutoPaste(false)
-                setImportOpen(true)
-              }}
+              findingSheet={fetchingSheet}
+              sheetSource={sheetSource}
+              onFindSheet={() => void autoFetchSheet()}
               onShowSheet={() => sheetRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
               onManual={() => {
                 setSmart(false)
@@ -691,11 +668,8 @@ export function SongEditorPage() {
                   ]}
                 />
                 <div className="flex items-center gap-1">
-                  <Button variant="ghost" size="sm" icon={Sparkles} loading={fetchingSheet} disabled={!song.title.trim() || !!song.content.trim()} onClick={() => void autoFetchSheet()}>
+                  <Button variant="ghost" size="sm" icon={Sparkles} loading={fetchingSheet} disabled={!song.title.trim() || hasChords} onClick={() => void autoFetchSheet()}>
                     Buscar cifra
-                  </Button>
-                  <Button variant="ghost" size="sm" icon={ClipboardPaste} onClick={() => setImportOpen(true)}>
-                    Colar
                   </Button>
                   <Button variant="ghost" size="sm" icon={Minus} onClick={() => transposeContent(-1)} disabled={!song.content} aria-label="Transpor meio tom abaixo" />
                   <Button variant="ghost" size="sm" icon={Plus} onClick={() => transposeContent(1)} disabled={!song.content} aria-label="Transpor meio tom acima" />
@@ -730,7 +704,6 @@ export function SongEditorPage() {
         </div>
       </div>
 
-      <ImportSheet open={importOpen} autoPaste={autoPaste} onClose={() => setImportOpen(false)} onApply={applyCifra} searchUrl={song.title ? chordSearchUrl(song.title, song.artist) : null} />
       <ThemeEditorSheet open={themeSheet} onClose={() => setThemeSheet(false)} onSaved={(tid) => set('themes', [...song.themes, tid])} />
       <BatchImportSheet open={batchOpen} onClose={() => setBatchOpen(false)} />
     </>
@@ -739,108 +712,21 @@ export function SongEditorPage() {
 
 const compactJoin = (parts: Array<string | false | null | undefined | 0>) => parts.filter(Boolean).join(' · ')
 
+const hostOf = (url: string | null) => {
+  try {
+    return url ? new URL(url).hostname.replace(/^www\./, '') : null
+  } catch {
+    return null
+  }
+}
+
+/** A cifra tem acordes (e não só a letra)? */
+const hasSheetChords = (doc: ReturnType<typeof parseSheet>) =>
+  doc.sections.some((s) => s.lines.some((l) => l.kind === 'chords' || (l.kind === 'lyric' && l.pieces.some((p) => p.chord))))
+
 /** Só os valores preenchidos (o que veio vazio não apaga nada). */
 function compactPatch(patch: Partial<Song>): Partial<Song> {
   return Object.fromEntries(Object.entries(patch).filter(([, v]) => v !== null && v !== undefined && v !== '' && !(Array.isArray(v) && v.length === 0))) as Partial<Song>
-}
-
-// ---------------------------------------------------------------------------
-// Colar cifra
-// ---------------------------------------------------------------------------
-
-function ImportSheet({
-  open,
-  autoPaste,
-  onClose,
-  onApply,
-  searchUrl,
-}: {
-  open: boolean
-  autoPaste?: boolean
-  onClose: () => void
-  onApply: (r: ImportAnalysis) => void
-  searchUrl: string | null
-}) {
-  const [text, setText] = useState('')
-  const analysis = useMemo(() => (text.trim() ? analyzeImport(text) : null), [text])
-  useEffect(() => {
-    if (!open) return
-    setText('')
-    if (!autoPaste || !navigator.clipboard?.readText) return
-    // Alguns aparelhos pedem permissão (ou nunca respondem): o campo já está aberto para colar à mão.
-    let alive = true
-    navigator.clipboard
-      .readText()
-      .then((t) => alive && t.trim() && setText((cur) => cur || t))
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [open, autoPaste])
-  return (
-    <Sheet
-      open={open}
-      onClose={onClose}
-      title="Colar cifra"
-      description="Cole a cifra completa."
-      size="lg"
-      tall
-      footer={
-        <div className="flex flex-wrap items-center gap-3">
-          {analysis && (
-            <div className="min-w-0 flex-1 text-[13px] text-muted">
-              {analysis.title && <b className="text-ink">{analysis.title}</b>}
-              {analysis.artist && ` · ${analysis.artist}`}
-              {analysis.key && ` · Tom ${analysis.key} (${analysis.keySource})`}
-              {` · ${analysis.chordCount} acordes`}
-            </div>
-          )}
-          <div className="ml-auto flex gap-2">
-            {searchUrl && !text && (
-              <a href={searchUrl} target="_blank" rel="noreferrer" className="inline-flex h-11 items-center gap-2 rounded-full px-4 text-[14px] font-semibold text-ink-2 hover:bg-surface-2">
-                <Search className="size-4" /> Procurar
-              </a>
-            )}
-            <Button
-              variant="ghost"
-              icon={FileText}
-              onClick={async () => {
-                const file = await pickFile('.txt,.cho,.chopro,.chordpro,.crd,.pro,text/plain')
-                if (file) setText(await file.text())
-              }}
-            >
-              Arquivo
-            </Button>
-            <Button
-              variant="outline"
-              icon={ClipboardPaste}
-              onClick={async () => {
-                try {
-                  setText(await navigator.clipboard.readText())
-                } catch {
-                  toast('Não foi possível ler a área de transferência', { description: 'Cole com Ctrl+V ou segurando o dedo no campo.' })
-                }
-              }}
-            >
-              Colar
-            </Button>
-            <Button icon={Wand2} disabled={!analysis} onClick={() => analysis && onApply(analysis)}>
-              Organizar
-            </Button>
-          </div>
-        </div>
-      }
-    >
-      <textarea
-        value={text}
-        onChange={(e) => setText(e.target.value)}
-        spellCheck={false}
-        autoFocus
-        placeholder={'Nome da música\nArtista\n\nTom: G\n[Intro] G  D  Em  C\n\n[Primeira Parte]\nG            D\nLetra da música…'}
-        className="block h-full min-h-[50vh] w-full resize-none rounded-2xl border border-line bg-surface-2/50 p-4 font-mono text-[13.5px] leading-[1.55] text-ink outline-none focus:border-primary"
-      />
-    </Sheet>
-  )
 }
 
 // ---------------------------------------------------------------------------
@@ -854,15 +740,41 @@ interface BatchItem {
   include: boolean
 }
 
+/** Uma música dos "vários links", já com a cifra quando ela é encontrada. */
+async function batchSong(it: BatchItem): Promise<Song> {
+  const fallback = it.meta?.title || `Música do ${it.link.provider === 'youtube' ? 'YouTube' : 'Spotify'}`
+  const sheet = it.meta?.title ? await fetchSongSheet(it.meta.title, it.meta.artist ?? '') : null
+  const a = sheet?.ok ? analyzeImport(sheet.content) : null
+  const content = a?.content.trim() ? a.content : ''
+  const title = (sheet?.ok && sheet.title) || fallback
+  const themes = suggestThemes(`${title}\n${content ? docLyrics(parseSheet(content)) : ''}`, 2)
+  return newSong({
+    title,
+    artist: (sheet?.ok && sheet.artist) || it.meta?.artist || '',
+    coverUrl: it.meta?.coverUrl ?? null,
+    youtubeUrl: it.link.provider === 'youtube' ? it.link.url : null,
+    spotifyUrl: it.link.provider === 'spotify' ? it.link.url : null,
+    content,
+    originalKey: content && a?.key ? normalizeKeyName(a.key) : null,
+    bpm: a?.bpm ?? null,
+    tempo: tempoFromBpm(a?.bpm ?? null),
+    themes,
+    moments: suggestMoments(themes, null, 2),
+    tags: content ? [] : ['sem-cifra'],
+  })
+}
+
 function BatchImportSheet({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate()
   const [text, setText] = useState('')
   const [items, setItems] = useState<BatchItem[]>([])
   const [saving, setSaving] = useState(false)
+  const [done, setDone] = useState(0)
   useEffect(() => {
     if (!open) return
     setText('')
     setItems([])
+    setDone(0)
   }, [open])
 
   const read = async (value: string) => {
@@ -887,7 +799,7 @@ function BatchImportSheet({ open, onClose }: { open: boolean; onClose: () => voi
       open={open}
       onClose={onClose}
       title="Importar vários links"
-      description="Um link do YouTube ou do Spotify por linha."
+      description="Um link do YouTube ou do Spotify por linha. A cifra de cada música entra sozinha."
       size="lg"
       footer={
         <Button
@@ -897,33 +809,33 @@ function BatchImportSheet({ open, onClose }: { open: boolean; onClose: () => voi
           disabled={!chosen.length || loading}
           onClick={async () => {
             setSaving(true)
+            setDone(0)
             let ok = 0
-            for (const it of chosen) {
-              const title = it.meta?.title || `Música do ${it.link.provider === 'youtube' ? 'YouTube' : 'Spotify'}`
-              const themes = suggestThemes(title, 2)
-              const saved = await saveSong(
-                newSong({
-                  title,
-                  artist: it.meta?.artist ?? '',
-                  coverUrl: it.meta?.coverUrl ?? null,
-                  youtubeUrl: it.link.provider === 'youtube' ? it.link.url : null,
-                  spotifyUrl: it.link.provider === 'spotify' ? it.link.url : null,
-                  themes,
-                  moments: suggestMoments(themes, null, 2),
-                  tags: ['sem-cifra'],
-                }),
-              )
-              if (saved) ok++
+            let missing = 0
+            // Duas de cada vez: o site da cifra responde melhor sem uma fila de pedidos.
+            const queue = [...chosen]
+            const worker = async () => {
+              for (let it = queue.shift(); it; it = queue.shift()) {
+                const song = await batchSong(it)
+                if (await saveSong(song)) {
+                  ok++
+                  if (!song.content) missing++
+                }
+                setDone((n) => n + 1)
+              }
             }
+            await Promise.all([worker(), worker()])
             setSaving(false)
             if (ok) {
-              toast.success(plural(ok, 'música adicionada', 'músicas adicionadas'), { description: 'Elas ficaram com a etiqueta “sem-cifra”.' })
+              toast.success(plural(ok, 'música adicionada', 'músicas adicionadas'), {
+                description: missing ? `${plural(missing, 'ficou', 'ficaram')} sem cifra, com a etiqueta “sem-cifra”.` : 'Todas com cifra.',
+              })
               onClose()
-              navigate('/musicas?q=sem-cifra')
+              navigate(missing ? '/musicas?q=sem-cifra' : '/musicas')
             }
           }}
         >
-          {chosen.length ? `Adicionar ${plural(chosen.length, 'música', 'músicas')}` : 'Adicionar'}
+          {saving ? `Buscando as cifras… ${done} de ${chosen.length}` : chosen.length ? `Adicionar ${plural(chosen.length, 'música', 'músicas')}` : 'Adicionar'}
         </Button>
       }
     >

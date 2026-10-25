@@ -17,11 +17,12 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 - **Músicas organizadas** por 35 temas em grupos (Quem Deus é, Obra de Cristo, Nossa resposta, Vida com Deus, Espírito & Igreja, Datas) — de *Adoração* e *Cruz & Sangue* a temas bem específicos como *Fidelidade de Deus*, *Nome de Jesus*, *Arrependimento*, *Refúgio & Proteção*, *Família*, *Volta de Jesus* e *Recomeço* — mais os **temas criados pela própria equipe** (com cor, ícone e palavras que o app reconhece nas letras). Também 11 momentos do culto, ritmo, tom, etiquetas, significado e referências bíblicas. Busca sem acento por título, artista, **trecho da letra** ou referência (“sl 23” acha Salmos 23).
 
 **Cadastro pelo nome (o jeito principal de cadastrar)**
-1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem os **vídeos do YouTube**, com música e artista já separados, versão (*Ao Vivo*, *Playback*…) e duração. O catálogo do Deezer só entra se o YouTube não responder.
-2. **Toque no vídeo certo** (dá para **ouvir no YouTube ali mesmo, dentro do app**, e trocar, se não for ele) e o app monta a ficha sozinho, com esse vídeo guardado na música, passo a passo na tela: **vídeo oficial** no YouTube, faixa no **Spotify**, capa, **tom original, BPM e compasso**, ritmo, **temas e momentos do culto**, **significado**, **referências bíblicas** e **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina) — com as fontes consultadas.
-3. **Cifra e letra**: o app encontra a página da cifra e **importa o texto automaticamente** (acordes + letra), mostrando a fonte. Se não achar, dá para **Abrir a cifra**, copiar e tocar em **Colar cifra** (ou enviar um arquivo **ChordPro/TXT**): ele separa acordes, letra e seções e confere o tom.
-4. Confira e salve. Tudo continua editável, e o **BPM no toque** fica à mão para ajustar o andamento.
-- Também dá para **colar um link** do YouTube/Spotify, cadastrar **vários links de uma vez** (marcadas como *sem-cifra* para completar depois) ou **preencher à mão**.
+1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem os **vídeos do YouTube**, com o nome certo da música e do artista (mesmo quando o vídeo vem como "Música - Artista"), versão (*Ao Vivo*, *Playback*…) e duração. O catálogo do Deezer só entra no lugar se o YouTube não responder.
+2. **Toque na imagem** para **ouvir um trecho de 30 segundos** ali mesmo, sem abrir o vídeo, e confirmar que é a música certa.
+3. **Toque no vídeo certo** e o app monta a ficha sozinho, com esse vídeo guardado na música: capa, **tom original e BPM**, ritmo, **temas e momentos do culto** e um rascunho do **significado**, tirados da própria cifra e do catálogo. Com a chave da IA (opcional, paga) a ficha vem completa: Spotify, compasso, **significado**, **referências bíblicas** e **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina), com as fontes consultadas.
+4. **Cifra e letra entram sozinhas**: o app acha a página da música pela busca do próprio Cifra Club e importa o texto com cada acorde em cima da sílaba certa, mostrando a fonte. Se o site demorar, toque em **Buscar de novo**.
+5. Confira e salve. Tudo continua editável, e o **BPM no toque** fica à mão para ajustar o andamento.
+- Também dá para **colar um link** do YouTube/Spotify, cadastrar **vários links de uma vez** (a cifra de cada uma entra sozinha; as que não forem encontradas ficam com a etiqueta *sem-cifra*) ou **preencher à mão**.
 
 > Letras e cifras têm direitos autorais: o app importa o texto já publicado na página citada (nunca o inventa) e mostra a fonte. A responsabilidade de ter licença para reproduzir o conteúdo — ex.: CCLI — é do ministério, a mesma que vale para o texto colado à mão.
 
@@ -32,7 +33,7 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 - Visão **Letra** limpa e grande para quem canta (abre direto nela para quem é vocal).
 - Tamanho da fonte, rolagem automática, metrônomo e tela sempre ligada.
 - **Modo ao vivo**: tela cheia e escura, uma música por vez, passa com gesto, setas do teclado ou **pedal Bluetooth**.
-- **Colar cifra**: copie do Cifra Club (ou de um PDF/WhatsApp) e o app separa acordes, letra e seções, lê título/artista/tom/capo, **detecta o tom** pelos acordes e sugere temas e momentos pela letra.
+- **Buscar cifra** no editor da música: traz a cifra e a letra de novo, quando a música ainda não tem acordes. O app **detecta o tom** pelos acordes e sugere temas e momentos pela letra.
 
 **Ouvir e ensaiar**
 - **Player dentro do app**: o vídeo do YouTube ou a faixa do Spotify tocam na própria página da música — dá para ouvir com a cifra aberta.
@@ -112,13 +113,13 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_...
 
 Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env.local` e preencha as mesmas variáveis. (`npm run dev` continua em modo demonstração sem o `.env.local`; `npm run build` usa o `.env.production`.)
 
-### Busca pelo nome e ficha automática (função do servidor + chave da IA)
-A função `importar-musica` faz a busca pelo nome, traz os dados dos links e monta a ficha. Sem a chave da IA, a busca, a capa, o BPM do catálogo e os links já funcionam; **com uma chave da API do Claude**, o app preenche o resto da ficha sozinho (vídeo oficial, Spotify, página da cifra, tom, BPM, compasso, temas, momentos, significado, referências bíblicas e notas de arranjo), pesquisando na web.
+### Busca pelo nome, cifra e ficha automática (função do servidor; chave da IA opcional)
+A função `importar-musica` faz a busca pelo nome, traz os dados dos links, importa a cifra e monta a ficha. **Sem a chave da IA, tudo isso funciona de graça**: busca no YouTube com prévia de 30 s, nome certo da música, cifra e letra, capa, BPM do catálogo, tom pela cifra e temas e momentos pela letra. **A chave da API do Claude é opcional e paga**: com ela, o app também pesquisa na web e escreve o significado, as referências bíblicas e as notas de arranjo, e acha o Spotify e o compasso.
 
 1. Crie a chave em [console.anthropic.com](https://console.anthropic.com) → *API Keys* (a conta precisa de créditos em *Billing*; dá para definir um limite de gasto mensal em *Limits*).
 2. No painel do Supabase: **Edge Functions → Secrets → Add new secret**, nome `ANTHROPIC_API_KEY`, valor = a chave.
 
-**Custo**: só quando alguém cadastra uma música pelo nome — em geral entre US$ 0,20 e US$ 0,40 por música (a IA e as buscas na web). A busca no catálogo, os links e o resto do app não têm custo.
+**Custo**: só com a chave, e só quando alguém cadastra uma música pelo nome — em geral entre US$ 0,20 e US$ 0,40 por música (a IA e as buscas na web). Sem ela, nada é cobrado.
 
 Para publicar a função num projeto novo, com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
 
@@ -129,7 +130,7 @@ supabase functions deploy importar-musica --no-verify-jwt   # a própria funçã
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts) e só atende membros logados. A cifra vem do bloco de texto da página citada com os espaços intactos, então cada acorde fica em cima da sílaba certa.
+A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts) e só atende membros logados. A página da cifra vem da busca do próprio Cifra Club (o endereço não dá para adivinhar: *Grande é o Senhor* fica em `grande-o-senhor` num artista e em `grande--o-senhor` em outro), e o texto é lido do bloco da cifra com os espaços intactos, então cada acorde fica em cima da sílaba certa. Para conferir o que está ligado no servidor: `{ "action": "status" }` devolve se há chave da IA e do YouTube (sem mostrar as chaves).
 
 #### Busca no YouTube (chave gratuita do Google)
 A busca pelo nome procura primeiro no YouTube, pela API oficial. Sem a chave, ela usa o catálogo do [Deezer](https://developers.deezer.com) — o resto funciona igual.
@@ -165,7 +166,7 @@ Pronto: o banco chama a função a cada minuto e ela envia só o que for novo. A
 O líder pode promover outros líderes na tela **Equipe**. Para tirar alguém da equipe, exclua o usuário no painel do Supabase (*Authentication → Users*): o perfil sai junto com as favoritas, playlists e mensagens dessa pessoa (as músicas e cultos que ela cadastrou continuam).
 
 ### 4. Cadastrar as músicas
-- **Nova música → digite a música e o artista → toque na gravação certa**: a ficha, a cifra e a letra entram sozinhas. Confira e salve. Para começar rápido, use **Vários links de uma vez** e complete as cifras depois (busque por *sem-cifra* em Músicas).
+- **Nova música → digite a música e o artista → toque no vídeo certo**: a ficha, a cifra e a letra entram sozinhas. Confira e salve. Para começar rápido, use **Vários links de uma vez**: a cifra de cada música também entra sozinha (as que faltarem ficam com *sem-cifra* em Músicas; abra e toque em **Buscar cifra**).
 - Quer começar com exemplos? **Ajustes → Adicionar músicas de exemplo** (e depois *Remover músicas de exemplo*).
 - Testou no modo demonstração e quer levar as músicas? No demo, **Ajustes → Exportar músicas**; no app oficial, **Ajustes → Importar músicas**.
 

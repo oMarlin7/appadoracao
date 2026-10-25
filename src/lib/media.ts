@@ -93,6 +93,11 @@ const normalizeName = (s: string) =>
     .replace(/vevo$|oficial$|official$|music$|-\s*topic$/g, '')
     .replace(/[^a-z0-9]/g, '')
 
+const VERSION_WORD = /^(?:cover|ac[uú]stic[oa]|ao|vivo|live|playback|instrumental|legendad[oa]|lyrics?|video|v[ií]deo|clipe|clip|oficial|official|karaok[eê]|com|letra|vers[aã]o|hd|4k)$/i
+
+/** "Cover acústico", "Ao Vivo", "Lyric Video": pedaço do título que é só a versão. */
+const isVersionPart = (part: string) => part.split(/\s+/).every((w) => VERSION_WORD.test(w))
+
 /** Nome do canal sem "VEVO", "- Topic", "Oficial"… */
 export function cleanChannelName(author: string | null | undefined): string {
   return tidy(
@@ -115,7 +120,7 @@ export function splitVideoTitle(rawTitle: string, author?: string | null): { tit
   const parts = t
     .split(/\s+[-–—|]\s+|\s+\/\/\s+/)
     .map(tidy)
-    .filter(Boolean)
+    .filter((p) => p && !isVersionPart(p))
   if (parts.length >= 2) {
     const ch = normalizeName(channel)
     const idx = ch ? parts.findIndex((p) => {
@@ -131,21 +136,7 @@ export function splitVideoTitle(rawTitle: string, author?: string | null): { tit
     return { title: tidy(parts.slice(1).join(' - ')), artist: parts[0] }
   }
   // "Música | Artista" sem espaços, ou só o título: o artista é o canal.
-  return { title: t, artist: channel }
-}
-
-// ---------------------------------------------------------------------------
-// Onde procurar a cifra (abre em outra aba; o membro copia e cola no app)
-// ---------------------------------------------------------------------------
-
-export function chordSearchUrl(title: string, artist: string): string {
-  const q = [title, artist].filter(Boolean).join(' ')
-  return `https://www.google.com/search?q=${encodeURIComponent(`${q} cifra`)}`
-}
-
-export function lyricsSearchUrl(title: string, artist: string): string {
-  const q = [title, artist].filter(Boolean).join(' ')
-  return `https://www.google.com/search?q=${encodeURIComponent(`${q} letra`)}`
+  return { title: parts.length === 1 ? parts[0] : t, artist: channel }
 }
 
 export function youtubeSearchUrl(title: string, artist: string): string {

@@ -23,8 +23,11 @@ export interface SongCandidate {
   album: string | null
   coverUrl: string | null
   durationSec: number | null
+  /** Trecho de 30 s da faixa (Deezer), para conferir se é a música certa. */
   previewUrl: string | null
   link: string | null
+  /** Vídeo do YouTube: a faixa do Deezer que é a mesma música ('deezer:123'). */
+  catalogId?: string | null
 }
 
 export interface SongDetails {
@@ -49,6 +52,9 @@ export interface SongDetails {
   content: string | null
   /** Endereço da página de onde a cifra+letra foram extraídas. */
   sourceUrl: string | null
+  /** Nome da música e do artista como estão no Cifra Club (corrige o que veio do título do vídeo). */
+  title?: string | null
+  artist?: string | null
 }
 
 const EMPTY_DETAILS: SongDetails = {
@@ -144,10 +150,62 @@ function videoVersion(raw: string): string | null {
   return null
 }
 
-/** Vídeo do YouTube ("Artista - Música (Ao Vivo)", do canal) → música, artista e versão. */
-export function candidateFromYouTube(c: SongCandidate): SongCandidate {
+/** Para comparar nomes: minúsculas, sem acento e sem pontuação, com espaço nas pontas. */
+const words = (s: string) =>
+  ` ${s
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()} `
+
+/**
+ * A faixa do catálogo que é a música deste vídeo: o título da faixa aparece no título do vídeo
+ * e o artista, no título ou no canal. Entre várias, fica a de nome mais completo e a da mesma
+ * versão (ao vivo, playback…).
+ */
+export function matchCatalog(videoTitle: string, channel: string, catalog: SongCandidate[]): SongCandidate | null {
+  const video = words(videoTitle)
+  const ch = words(cleanChannelName(channel))
+  const version = videoVersion(videoTitle)
+  let best: SongCandidate | null = null
+  let bestScore = 0
+  for (const t of catalog) {
+    const title = words(t.title)
+    const artist = words(t.artist)
+    if (title.trim().length < 2 || artist.trim().length < 2 || !video.includes(title)) continue
+    if (!video.includes(artist) && !(ch.trim() && (ch.includes(artist) || artist.includes(ch)))) continue
+    const sameVersion = version ? !!t.version && words(t.version).includes(words(version)) : !t.version
+    const score = title.length + (sameVersion ? 100 : 0)
+    if (score > bestScore) {
+      best = t
+      bestScore = score
+    }
+  }
+  return best
+}
+
+/**
+ * Vídeo do YouTube ("Artista - Música (Ao Vivo)", do canal) → música, artista e versão. Com a
+ * faixa do catálogo, o nome vem dela (o título do vídeo pode vir na ordem "Música - Artista") e
+ * a prévia de 30 s também.
+ */
+export function candidateFromYouTube(c: SongCandidate, catalog: SongCandidate[] = []): SongCandidate {
+  const version = videoVersion(c.title)
+  const track = matchCatalog(c.title, c.artist, catalog)
+  if (track)
+    return {
+      ...c,
+      title: track.title,
+      artist: track.artist,
+      version,
+      album: track.album,
+      coverUrl: track.coverUrl ?? c.coverUrl,
+      previewUrl: track.previewUrl,
+      catalogId: track.id,
+    }
   const { title, artist } = splitVideoTitle(c.title, c.artist)
-  return { ...c, title: title || c.title, artist: artist || cleanChannelName(c.artist), version: videoVersion(c.title) }
+  return { ...c, title: title || c.title, artist: artist || cleanChannelName(c.artist), version }
 }
 
 /** Tira repetições (a mesma faixa em coletâneas), mantendo a ordem de relevância. */
@@ -198,9 +256,9 @@ export async function searchSongs(q: string): Promise<SongCandidate[]> {
   let serverError: unknown = null
   if (useServer()) {
     try {
-      const r = await backend.invoke<{ results?: SongCandidate[]; error?: string }>(IMPORT_FUNCTION, { action: 'buscar', q: query })
+      const r = await backend.invoke<{ results?: SongCandidate[]; catalog?: SongCandidate[]; error?: string }>(IMPORT_FUNCTION, { action: 'buscar', q: query })
       if (r.results?.length) {
-        const list = r.results.map((c) => (isYouTubeCandidate(c) ? candidateFromYouTube(c) : c))
+        const list = r.results.map((c) => (isYouTubeCandidate(c) ? candidateFromYouTube(c, r.catalog) : c))
         if (recentSearches.size >= 30) recentSearches.delete(recentSearches.keys().next().value!)
         recentSearches.set(cacheKey, list)
         return list
@@ -227,9 +285,18 @@ export function catalogFor(themes: Theme[]) {
   }
 }
 
-export async function completeSong(c: Pick<SongCandidate, 'id' | 'title' | 'artist' | 'album' | 'durationSec'>, themes: Theme[]): Promise<SongDetails> {
+export async function completeSong(c: Pick<SongCandidate, 'id' | 'title' | 'artist' | 'album' | 'durationSec' | 'catalogId'>, themes: Theme[]): Promise<SongDetails> {
   if (useServer()) {
-    const r = await backend.invoke<Partial<SongDetails> & { error?: string }>(IMPORT_FUNCTION, { action: 'completar', ...c, ...catalogFor(themes) })
+    const r = await backend.invoke<Partial<SongDetails> & { error?: string }>(IMPORT_FUNCTION, {
+      action: 'completar',
+      id: c.id,
+      catalogId: c.catalogId ?? null,
+      title: c.title,
+      artist: c.artist,
+      album: c.album,
+      durationSec: c.durationSec,
+      ...catalogFor(themes),
+    })
     if (r.error) throw new Error(r.error)
     return normalizeDetails(r)
   }

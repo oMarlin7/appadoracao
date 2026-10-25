@@ -48,6 +48,7 @@ describe('título do vídeo → música e artista', () => {
   it('usa o canal para saber qual lado é o artista', () => {
     expect(splitVideoTitle('Gabriela Rocha - Lugar Secreto (Ao Vivo)', 'Gabriela Rocha')).toEqual({ title: 'Lugar Secreto', artist: 'Gabriela Rocha' })
     expect(splitVideoTitle('Ninguém Explica Deus | Preto no Branco feat. Gabriela Rocha', 'Preto no Branco')).toEqual({ title: 'Ninguém Explica Deus', artist: 'Preto no Branco feat. Gabriela Rocha' })
+    expect(splitVideoTitle('Autor da Vida | Cover acústico', 'Coral Esperança')).toEqual({ title: 'Autor da Vida', artist: 'Coral Esperança' })
   })
 
   it('tira "clipe oficial", "lyric video" e afins', () => {

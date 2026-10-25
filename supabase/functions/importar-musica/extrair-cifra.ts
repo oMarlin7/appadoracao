@@ -5,7 +5,8 @@
 // seções entre colchetes. O texto é extraído da própria página citada — nunca inventado.
 //
 // O navegador não consegue buscar essas páginas (CORS e bloqueio anti-robô), então a
-// extração roda aqui, no servidor, e o app recebe só o texto pronto.
+// extração roda aqui, no servidor, e o app recebe só o texto pronto. A página certa vem da
+// busca do próprio Cifra Club, que também dá o nome da música como está lá.
 
 export interface ExtractedSheet {
   content: string
@@ -14,6 +15,16 @@ export interface ExtractedSheet {
   /** De qual site veio (para atribuição na tela). */
   source: 'cifraclub' | 'letras' | 'lrclib' | 'web'
   sourceUrl: string | null
+  /** Nome da música e do artista como estão no Cifra Club (quando a página veio da busca). */
+  title: string | null
+  artist: string | null
+}
+
+/** Página de uma música no Cifra Club, achada pela busca do próprio site. */
+export interface CifraPage {
+  url: string
+  title: string
+  artist: string
 }
 
 // ---------------------------------------------------------------------------
@@ -138,7 +149,7 @@ function sourceOf(url: string): ExtractedSheet['source'] {
 
 function finalize(content: string, source: ExtractedSheet['source']): ExtractedSheet {
   const normalized = normalizeText(content)
-  return { content: normalized, originalKey: keyFromText(normalized), bpm: bpmFromText(normalized), source, sourceUrl: null }
+  return { content: normalized, originalKey: keyFromText(normalized), bpm: bpmFromText(normalized), source, sourceUrl: null, title: null, artist: null }
 }
 
 // ---------------------------------------------------------------------------
@@ -271,6 +282,121 @@ function slug(s: string): string {
   return stripAccents(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80)
 }
 
+// ---------------------------------------------------------------------------
+// Nome da música (título do vídeo → como a música se chama)
+// ---------------------------------------------------------------------------
+
+const VERSION_PART =
+  /\b(?:ao vivo|live|ac[uú]stic[oa]|playback|instrumental|clipe|clip|oficial|official|v[ií]deo|video|lyric|letra|legendad[oa]|cover|vers[aã]o|remix|single|karaok[eê]|cifrad[oa]|hd|4k)\b/i
+const NUMBERING_PART = /^(?:(?:ato|ep|parte|part|vol(?:ume)?|faixa|track|cap[ií]tulo|cd|dvd)\.?\s*)?\d{1,3}$/i
+
+/** "ATO 3 - 04 - Grande é o Senhor (Great is the Lord) - Acústico Ao Vivo" → "Grande é o Senhor" */
+export function cleanSongTitle(title: string): string {
+  const base = title
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .replace(/\s+(?:feat\.?|ft\.?|part\.|participa[cç][aã]o)\s.*$/i, ' ')
+  const parts = base
+    .split(/\s+[-–—|:]\s+/)
+    .map((p) => p.replace(/\s+/g, ' ').trim())
+    .filter(Boolean)
+  const kept = parts.filter((p) => !NUMBERING_PART.test(p) && !(VERSION_PART.test(p) && p.split(' ').length <= 4))
+  return (kept.length ? kept : parts).join(' ').replace(/^\d{1,3}\s*[.)-]\s*/, '').trim()
+}
+
+/** "Adhemar de Campos e Nívea Soares" → "Adhemar de Campos" */
+const mainArtist = (artist: string) => artist.split(/\s+(?:e|&|feat\.?|ft\.?|part\.?|com|x)\s+|,|\//i)[0].trim()
+
+/** Para comparar nomes: sem acento, sem pontuação e sem o que está entre parênteses. */
+const nameKey = (s: string) =>
+  stripAccents(s)
+    .toLowerCase()
+    .replace(/\([^)]*\)|\[[^\]]*\]/g, ' ')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+
+/** 3: mesmo nome · 2: um contém o outro · 0: outro nome */
+function sameName(a: string, b: string): number {
+  if (!a || !b) return 0
+  if (a === b) return 3
+  return ` ${a} `.includes(` ${b} `) || ` ${b} `.includes(` ${a} `) ? 2 : 0
+}
+
+/**
+ * Escolhe, entre os resultados da busca, as páginas desta música. Título igual basta (um cover
+ * usa a cifra da gravação original); título parecido precisa do artista certo. Também reconhece
+ * título e artista trocados ("Autor da Vida - Aline Barros" lido ao contrário).
+ */
+export function pickCifraPages(hits: CifraPage[], title: string, artist: string): CifraPage[] {
+  const t = nameKey(cleanSongTitle(title))
+  const a = nameKey(artist)
+  const scored = hits.map((h, i) => {
+    const ht = nameKey(h.title)
+    const ha = nameKey(h.artist)
+    let tm = sameName(ht, t)
+    let am = sameName(ha, a)
+    if (!tm && a) {
+      const swappedTitle = sameName(ht, nameKey(cleanSongTitle(artist)))
+      const swappedArtist = sameName(ha, nameKey(title))
+      if (swappedTitle && swappedArtist) [tm, am] = [swappedTitle, swappedArtist]
+    }
+    const ok = tm === 3 || (tm === 2 && (am > 0 || !a))
+    return { h, score: ok ? tm * 10 + am * 4 - i * 0.1 : -1 }
+  })
+  return scored
+    .filter((s) => s.score > 0)
+    .sort((x, y) => y.score - x.score)
+    .map((s) => s.h)
+}
+
+// ---------------------------------------------------------------------------
+// Busca do Cifra Club (a mesma da caixa de busca do site)
+// ---------------------------------------------------------------------------
+
+interface CifraClubDoc {
+  art?: string
+  txt?: string
+  dns?: string
+  url?: string
+}
+
+async function searchCifraClub(q: string): Promise<CifraPage[]> {
+  try {
+    const res = await fetch(`https://solr.sscdn.co/cc/c7/?q=${encodeURIComponent(q)}`, {
+      headers: { 'User-Agent': UA, Accept: 'application/json' },
+      signal: AbortSignal.timeout(5000),
+    })
+    if (!res.ok) return []
+    const data = JSON.parse(await res.text()) as { response?: { docs?: CifraClubDoc[] } }
+    // Só músicas (artistas e álbuns vêm sem o endereço da música).
+    return (data.response?.docs ?? [])
+      .filter((d) => d.txt && d.dns && d.url && /^[a-z0-9-]+$/.test(d.dns) && /^[a-z0-9-]+$/.test(d.url))
+      .map((d) => ({ url: `https://www.cifraclub.com.br/${d.dns}/${d.url}/`, title: d.txt!.trim(), artist: (d.art ?? '').trim() }))
+  } catch (e) {
+    console.warn(`[cifra] busca falhou — ${q} — ${e instanceof Error ? e.message : String(e)}`)
+    return []
+  }
+}
+
+/**
+ * Páginas do Cifra Club desta música, da mais provável para a menos. O endereço não dá para
+ * adivinhar ("grande-o-senhor", "grande--o-senhor"…), então a busca do site é a fonte.
+ */
+export async function findCifraPages(title: string, artist: string): Promise<CifraPage[]> {
+  const t = cleanSongTitle(title)
+  if (!t) return []
+  const a = artist.trim()
+  const main = mainArtist(a)
+  const queries = [...new Set([a && `${t} ${a}`, main && main !== a && `${t} ${main}`, t].filter((q): q is string => !!q))]
+  for (const q of queries) {
+    const pages = pickCifraPages(await searchCifraClub(q), title, artist)
+    if (pages.length) {
+      console.log(`[cifra] busca: ${pages[0].url}`)
+      return pages.slice(0, 2)
+    }
+  }
+  return []
+}
+
 async function fetchLrclib(title: string, artist: string): Promise<string | null> {
   try {
     const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}`
@@ -360,7 +486,7 @@ export function jinaMarkdownToSheet(md: string): string {
  * Lê a página por um navegador real (Jina). `html` mantém os espaços e as quebras de linha do
  * <pre>, ou seja, a posição de cada acorde; o `markdown` junta a linha dos acordes com a da letra.
  */
-async function fetchJina(url: string, format: 'html' | 'markdown' = 'html', ms = 25_000): Promise<string | null> {
+async function fetchJina(url: string, format: 'html' | 'markdown', ms: number): Promise<{ status: number; text: string | null }> {
   try {
     const res = await fetch(`https://r.jina.ai/${url}`, {
       headers: { 'User-Agent': UA, Accept: 'text/plain', 'X-Return-Format': format, 'X-Target-Selector': 'pre' },
@@ -368,36 +494,14 @@ async function fetchJina(url: string, format: 'html' | 'markdown' = 'html', ms =
     })
     if (!res.ok) {
       console.warn(`[cifra] jina HTTP ${res.status} — ${url}`)
-      return null
+      return { status: res.status, text: null }
     }
     const text = await res.text()
     console.log(`[cifra] jina ok (${text.length} bytes) — ${url}`)
-    return text
+    return { status: res.status, text }
   } catch (e) {
     console.warn(`[cifra] jina falha — ${url} — ${e instanceof Error ? e.message : String(e)}`)
-    return null
-  }
-}
-
-/** Acha a página da cifra no Cifra Club pela busca do Jina (quando o slug adivinhado erra). */
-async function findCifraUrlViaSearch(title: string, artist: string): Promise<string | null> {
-  try {
-    const q = `${title} ${artist} cifraclub`
-    const res = await fetch(`https://s.jina.ai/${encodeURIComponent(q)}`, {
-      headers: { 'User-Agent': UA, Accept: 'text/plain' },
-      signal: AbortSignal.timeout(12_000),
-    })
-    if (!res.ok) return null
-    const text = await res.text()
-    const m = /https?:\/\/(?:www\.)?cifraclub\.com\.br\/[^\s)"'<>]+/i.exec(text)
-    if (m) {
-      const url = m[0].replace(/[.,;)\]]+$/, '')
-      console.log(`[cifra] busca achou: ${url}`)
-      return url
-    }
-    return null
-  } catch {
-    return null
+    return { status: 0, text: null }
   }
 }
 
@@ -405,70 +509,65 @@ async function findCifraUrlViaSearch(title: string, artist: string): Promise<str
  * Cifra de uma página: o HTML do <pre>, com cada acorde na coluna certa. Se o Jina não
  * responder em HTML, tenta o markdown (os acordes ficam na linha certa, mas sem a coluna).
  */
-async function readSheet(url: string): Promise<string | null> {
-  const html = await fetchJina(url, 'html')
-  if (html) return jinaHtmlToSheet(html)
-  const md = await fetchJina(url, 'markdown')
-  const content = md ? jinaMarkdownToSheet(md) : null
+async function readSheet(url: string, ms = 25_000): Promise<string | null> {
+  const html = await fetchJina(url, 'html', ms)
+  if (html.text) return jinaHtmlToSheet(html.text)
+  // A página não existe (ou não tem cifra): o markdown daria no mesmo.
+  if (html.status === 404 || html.status === 422) return null
+  const md = await fetchJina(url, 'markdown', ms)
+  const content = md.text ? jinaMarkdownToSheet(md.text) : null
   return content && looksLikeSheet(content) ? content : null
 }
 
+/** Cifra+letra de uma página conhecida (ex.: a que a pesquisa da IA citou). */
+export async function sheetFromPage(url: string, ms = 25_000, page?: CifraPage): Promise<ExtractedSheet | null> {
+  const content = await readSheet(url, ms)
+  if (!content) return null
+  console.log(`[cifra] fonte: jina — ${url}`)
+  return {
+    content,
+    originalKey: keyFromText(content),
+    bpm: bpmFromText(content),
+    source: sourceOf(url),
+    sourceUrl: url,
+    title: page?.title ?? null,
+    artist: page?.artist ?? null,
+  }
+}
+
 /**
- * Tenta extrair cifra+letra de uma música.
- * Ordem: Jina (navegador real) → busca do Jina → LRCLIB (letra).
+ * Cifra+letra de uma música. Ordem: a página citada → as páginas que a busca do Cifra Club
+ * achou (ou, sem nenhuma, o endereço adivinhado) → só a letra, no LRCLIB.
+ * `pages` evita buscar de novo quando quem chama já buscou.
  */
 export async function fetchSheet(
   title: string,
   artist: string,
-  cifraUrl?: string | null,
-  budgetMs = 45_000,
+  opts: { cifraUrl?: string | null; pages?: CifraPage[]; budgetMs?: number } = {},
 ): Promise<ExtractedSheet | null> {
   const t = title.trim()
   if (!t) return null
-  const deadline = Date.now() + budgetMs
+  const deadline = Date.now() + (opts.budgetMs ?? 45_000)
   const a = artist.trim()
+  const pages = opts.pages ?? (await findCifraPages(t, a))
+  const guessed = !pages.length && a ? [`https://www.cifraclub.com.br/${slug(mainArtist(a))}/${slug(cleanSongTitle(t))}/`] : []
+  const urls = [...new Set([opts.cifraUrl, ...pages.map((p) => p.url), ...guessed].filter((u): u is string => !!u))]
 
-  // Candidatos: link exato da IA → cifraclub adivinhado → letras.mus adivinhado.
-  const candidates: string[] = []
-  if (cifraUrl) candidates.push(cifraUrl)
-  if (a) {
-    candidates.push(`https://www.cifraclub.com.br/${slug(a)}/${slug(t)}/`)
-    candidates.push(`https://www.letras.mus.br/${slug(a)}/${slug(t)}/`)
-  }
-  const unique = [...new Set(candidates.filter(Boolean))]
-
-  // 1) Jina sobre cada candidato (navegador real; contorna o Cloudflare).
-  for (const url of unique) {
-    if (Date.now() > deadline) break
-    const content = await readSheet(url)
-    if (content) {
-      console.log(`[cifra] fonte: jina — ${url}`)
-      return { content, originalKey: keyFromText(content), bpm: bpmFromText(content), source: sourceOf(url), sourceUrl: url }
-    }
+  for (const url of urls) {
+    const left = deadline - Date.now()
+    if (left < 3000) break
+    const sheet = await sheetFromPage(url, Math.min(25_000, left), pages.find((p) => p.url === url) ?? pages[0])
+    if (sheet) return sheet
   }
 
-  // 2) Se o slug adivinhado não achou, busca a página certa e tenta de novo.
-  if (Date.now() <= deadline && a) {
-    const found = await findCifraUrlViaSearch(t, a)
-    if (found && !unique.includes(found)) {
-      const content = await readSheet(found)
-      if (content) {
-        console.log(`[cifra] fonte: jina (via busca) — ${found}`)
-        return { content, originalKey: keyFromText(content), bpm: bpmFromText(content), source: 'cifraclub', sourceUrl: found }
-      }
-    }
-  }
-
-  // 3) Letra (sem acordes) via LRCLIB.
-  if (Date.now() <= deadline) {
-    const lyrics = await fetchLrclib(t, a)
+  // Só a letra (sem acordes), com o nome certo quando a busca achou a música.
+  if (Date.now() < deadline) {
+    const lyrics = await fetchLrclib(pages[0]?.title ?? cleanSongTitle(t), pages[0]?.artist ?? a)
     if (lyrics) {
       console.log('[cifra] fonte: lrclib (só letra)')
-      return { content: lyrics, originalKey: null, bpm: null, source: 'lrclib', sourceUrl: 'https://lrclib.net/' }
+      return { content: lyrics, originalKey: null, bpm: null, source: 'lrclib', sourceUrl: 'https://lrclib.net/', title: pages[0]?.title ?? null, artist: pages[0]?.artist ?? null }
     }
   }
   console.warn(`[cifra] nada encontrado para "${title}" / "${artist}"`)
   return null
 }
-
-

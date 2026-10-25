@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseSheet } from '@/lib/music/sheet'
-import { extractSheetFromHtml, isChordToken, jinaHtmlToSheet, jinaMarkdownToSheet } from './extrair-cifra.ts'
+import { cleanSongTitle, extractSheetFromHtml, isChordToken, jinaHtmlToSheet, jinaMarkdownToSheet, pickCifraPages, type CifraPage } from './extrair-cifra.ts'
 
 /** Acorde → trecho da letra logo abaixo dele, como o app mostra. */
 function chordOver(content: string): Array<[string, string]> {
@@ -151,5 +151,49 @@ describe('jinaHtmlToSheet', () => {
 
   it('página sem cifra devolve nada', () => {
     expect(jinaHtmlToSheet('<html><body><pre>Página não encontrada</pre></body></html>')).toBeNull()
+  })
+})
+
+describe('nome da música para a busca da cifra', () => {
+  it('tira numeração, versão e o que está entre parênteses', () => {
+    expect(cleanSongTitle('ATO 3 - 04 - Grande é o Senhor')).toBe('Grande é o Senhor')
+    expect(cleanSongTitle('Grande é o Senhor (Great is the Lord) - Acústico Ao Vivo')).toBe('Grande é o Senhor')
+    expect(cleanSongTitle('Eu Falo Jesus (Ao Vivo)')).toBe('Eu Falo Jesus')
+    expect(cleanSongTitle('Corpo e Família part. Késia Soares')).toBe('Corpo e Família')
+    expect(cleanSongTitle('Autor da Vida')).toBe('Autor da Vida')
+  })
+})
+
+describe('escolha da página da cifra', () => {
+  const page = (artist: string, title: string, path: string): CifraPage => ({ url: `https://www.cifraclub.com.br/${path}/`, title, artist })
+  // Resultados reais da busca do Cifra Club.
+  const aline = [page('Aline Barros', 'Autor da Vida', 'aline-barros/autor-da-vida'), page('Aline Barros', 'Poder Pra Salvar', 'aline-barros/poder-pra-salvar')]
+  const grande = [
+    page('Adhemar de Campos', 'Grande É o Senhor', 'adhemar-de-campos/grande-o-senhor'),
+    page('Adhemar de Campos', 'Louvemos Ao Senhor', 'adhemar-de-campos/louvemos-ao-senhor'),
+    page('Adhemar de Campos', 'Grande É o Senhor (part. Nívea Soares)', 'adhemar-de-campos/grande-e-o-senhor-part-nivea-soares'),
+    page('Xandão de Deus', 'Grande é o Senhor', 'xandao-de-deus/grande-o-senhor'),
+  ]
+
+  it('acha a página pelo nome, mesmo com o endereço diferente do título', () => {
+    expect(pickCifraPages(grande, 'ATO 3 - 04 - Grande é o Senhor', 'ADHEMAR DE CAMPOS')[0].url).toBe('https://www.cifraclub.com.br/adhemar-de-campos/grande-o-senhor/')
+  })
+
+  it('prefere o artista do vídeo quando há várias gravações', () => {
+    expect(pickCifraPages(grande, 'Grande é o Senhor', 'Xandão de Deus')[0].url).toBe('https://www.cifraclub.com.br/xandao-de-deus/grande-o-senhor/')
+  })
+
+  it('entende música e artista trocados', () => {
+    const [p] = pickCifraPages(aline, 'Aline Barros', 'Autor da Vida')
+    expect(p).toMatchObject({ title: 'Autor da Vida', artist: 'Aline Barros', url: 'https://www.cifraclub.com.br/aline-barros/autor-da-vida/' })
+  })
+
+  it('um cover usa a cifra da gravação original', () => {
+    expect(pickCifraPages(aline, 'Autor da Vida', 'Coral da Igreja')[0].url).toBe('https://www.cifraclub.com.br/aline-barros/autor-da-vida/')
+  })
+
+  it('não aceita outra música', () => {
+    expect(pickCifraPages(aline, 'Ao Único', 'Aline Barros')).toEqual([])
+    expect(pickCifraPages(grande, 'Senhor', 'Fulano')).toEqual([])
   })
 })

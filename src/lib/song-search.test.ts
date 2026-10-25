@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiErrorMessage, candidateFromDeezer, candidateFromYouTube, catalogFor, dedupeCandidates, formatDuration, isYouTubeCandidate, normalizeDetails } from './song-search'
+import { aiErrorMessage, candidateFromDeezer, candidateFromYouTube, catalogFor, dedupeCandidates, formatDuration, isYouTubeCandidate, matchCatalog, normalizeDetails, type SongCandidate } from './song-search'
 import { THEMES } from './taxonomy'
 
 describe('busca pelo nome', () => {
@@ -78,5 +78,54 @@ describe('busca no YouTube', () => {
     expect(c.link).toBe('https://www.youtube.com/watch?v=abcdefghijk')
     expect(isYouTubeCandidate(c)).toBe(true)
     expect(isYouTubeCandidate({ id: 'deezer:1' })).toBe(false)
+  })
+})
+
+describe('vídeo do YouTube + faixa do catálogo', () => {
+  const track = (id: number, title: string, artist: string, version: string | null = null): SongCandidate => ({
+    id: `deezer:${id}`,
+    title,
+    version,
+    artist,
+    album: 'Reino',
+    coverUrl: `https://cdn/${id}.jpg`,
+    durationSec: 305,
+    previewUrl: `https://preview/${id}.mp3`,
+    link: null,
+  })
+  const catalog = [track(1, 'Autor da Vida', 'Aline Barros'), track(2, 'Autor da Vida', 'Aline Barros', 'Ao Vivo'), track(3, 'Poder Pra Salvar', 'Aline Barros')]
+  const video = (title: string, channel: string): SongCandidate => ({
+    id: 'youtube:abcdefghijk',
+    title,
+    version: null,
+    artist: channel,
+    album: null,
+    coverUrl: 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg',
+    durationSec: 300,
+    previewUrl: null,
+    link: 'https://www.youtube.com/watch?v=abcdefghijk',
+  })
+
+  it('título "Música - Artista" fica com o nome certo e a prévia da faixa', () => {
+    const c = candidateFromYouTube(video('Autor da Vida - Aline Barros (Clipe Oficial)', 'MK Music'), catalog)
+    expect(c).toMatchObject({ title: 'Autor da Vida', artist: 'Aline Barros', previewUrl: 'https://preview/1.mp3', catalogId: 'deezer:1', link: 'https://www.youtube.com/watch?v=abcdefghijk' })
+  })
+
+  it('prefere a faixa da mesma versão do vídeo', () => {
+    expect(matchCatalog('Aline Barros | Autor da Vida (Ao Vivo)', 'Aline Barros', catalog)?.id).toBe('deezer:2')
+  })
+
+  it('o artista pode estar só no canal', () => {
+    expect(matchCatalog('Autor da Vida', 'Aline Barros - Topic', catalog)?.id).toBe('deezer:1')
+  })
+
+  it('sem a faixa no catálogo, separa pelo título do vídeo e fica sem prévia', () => {
+    const c = candidateFromYouTube(video('Ministério Fulano - Canção Nova (Ao Vivo)', 'Ministério Fulano'), catalog)
+    expect(c).toMatchObject({ title: 'Canção Nova', artist: 'Ministério Fulano', version: 'Ao Vivo', previewUrl: null })
+    expect(c.catalogId).toBeUndefined()
+  })
+
+  it('não casa a música de outro artista', () => {
+    expect(matchCatalog('Autor da Vida - Coral Esperança', 'Coral Esperança', catalog)).toBeNull()
   })
 })

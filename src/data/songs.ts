@@ -9,7 +9,7 @@ import type { Song } from '@/types'
  *   que mostram cifra, letra, transposição e organização por tema/momento.
  * • Hinos em domínio público (autor, compositor e tradutor falecidos há mais de 70 anos).
  *
- * As músicas que o ministério canta entram pelo botão "Nova música" → "Colar cifra".
+ * As músicas que o ministério canta entram pelo botão "Nova música" (busca pelo nome, cifra automática).
  * As cifras abaixo são escritas em ChordPro (preciso) e convertidas para o formato
  * tradicional de acordes sobre a letra, que é como ficam salvas e editáveis.
  */

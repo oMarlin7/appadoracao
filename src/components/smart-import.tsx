@@ -5,7 +5,6 @@ import {
   BookOpen,
   Check,
   ChevronRight,
-  ClipboardPaste,
   ExternalLink,
   FileText,
   Gauge,
@@ -17,29 +16,32 @@ import {
   Pause,
   PencilLine,
   Play,
+  RotateCw,
   Search,
   Sparkles,
   Tags,
   Video,
   X,
 } from 'lucide-react'
-import { MediaEmbed, TapTempo } from '@/components/media'
+import { TapTempo } from '@/components/media'
 import { SongCover } from '@/components/song-bits'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/primitives'
 import { fetchLinkMetadata, type LinkMetadata } from '@/lib/song-import'
-import { chordSearchUrl, parseMediaUrl, type MediaLink } from '@/lib/media'
+import { parseMediaUrl, type MediaLink } from '@/lib/media'
 import { detectKeyFromText } from '@/lib/music/analyze'
 import { parseSheet } from '@/lib/music/sheet'
 import { prettyAccidentals } from '@/lib/music/theory'
+import { usePreview } from '@/lib/preview'
 import { aiErrorMessage, completeSong, formatDuration, isYouTubeCandidate, searchSongs, type SongCandidate, type SongDetails } from '@/lib/song-search'
 import { MOMENT_BY_ID, TEMPOS, THEME_BY_ID, type Theme } from '@/lib/taxonomy'
 import { cn, plural } from '@/lib/utils'
 import type { Song } from '@/types'
 
 /**
- * Cadastro pelo nome: digitar "música e artista", escolher o vídeo certo no YouTube e o app
- * completa a ficha sozinho (o Deezer só aparece quando o YouTube não responde).
+ * Cadastro pelo nome: digitar "música e artista", escolher o vídeo certo no YouTube (dá para
+ * ouvir um trecho de cada um ali mesmo) e o app completa a ficha e a cifra sozinho (o Deezer
+ * só aparece no lugar quando o YouTube não responde).
  */
 export function SmartImport({
   song,
@@ -48,8 +50,9 @@ export function SmartImport({
   onDetails,
   onLink,
   onReset,
-  onPasteCifra,
-  onOpenPaste,
+  findingSheet,
+  sheetSource,
+  onFindSheet,
   onShowSheet,
   onManual,
   onBatch,
@@ -63,8 +66,11 @@ export function SmartImport({
   onDetails: (d: SongDetails | null, c: SongCandidate) => void
   onLink: (link: MediaLink, meta: LinkMetadata) => void
   onReset: () => void
-  onPasteCifra: () => void
-  onOpenPaste: () => void
+  /** Buscando a cifra de novo (pedido da equipe, quando a primeira busca não achou). */
+  findingSheet: boolean
+  /** Página de onde veio a cifra que está na música. */
+  sheetSource: string | null
+  onFindSheet: () => void
   onShowSheet: () => void
   onManual: () => void
   onBatch: () => void
@@ -80,6 +86,7 @@ export function SmartImport({
   const [fillError, setFillError] = useState<string | null>(null)
   const token = useRef(0)
   const inputRef = useRef<HTMLInputElement>(null)
+  useEffect(() => () => usePreview.getState().stop(), [])
 
   // Busca enquanto digita (ou lê o link colado).
   useEffect(() => {
@@ -133,6 +140,8 @@ export function SmartImport({
 
   const choose = async (c: SongCandidate, apply = true) => {
     const my = ++token.current
+    // A prévia da música escolhida continua; a de outra para.
+    if (usePreview.getState().id !== c.id) usePreview.getState().stop()
     if (apply) onPick(c)
     setPicked(c)
     setDetails(null)
@@ -154,6 +163,7 @@ export function SmartImport({
 
   const reset = () => {
     token.current++
+    usePreview.getState().stop()
     setPicked(null)
     setDetails(null)
     setFilling(false)
@@ -173,11 +183,11 @@ export function SmartImport({
               song={song}
               details={details}
               filling={filling}
-              error={fillError ?? aiErrorMessage(details?.aiError)}
+              error={fillError ?? (details?.aiError === 'sem-chave' ? null : aiErrorMessage(details?.aiError))}
               onRetry={() => void choose(picked, false)}
               onBpm={onBpm}
             />
-            <CifraStep song={song} cifraUrl={details?.cifraUrl ?? null} onPaste={onPasteCifra} onOpenPaste={onOpenPaste} onShowSheet={onShowSheet} />
+            <CifraStep song={song} sourceUrl={sheetSource} busy={filling || findingSheet} onFind={onFindSheet} onShowSheet={onShowSheet} />
             {details && details.sources.length > 0 && <Sources sources={details.sources} />}
           </motion.div>
         ) : (
@@ -272,6 +282,37 @@ function VideoThumb({ id }: { id: string }) {
 
 const videoId = (c: SongCandidate) => c.id.slice('youtube:'.length)
 
+/** Miniatura que toca o trecho de 30 s da música (sem abrir o vídeo). */
+function PreviewThumb({ c }: { c: SongCandidate }) {
+  const active = usePreview((s) => s.id === c.id)
+  const playing = usePreview((s) => s.id === c.id && s.playing)
+  const progress = usePreview((s) => (s.id === c.id ? s.progress : 0))
+  const thumb = isYouTubeCandidate(c) ? <VideoThumb id={videoId(c)} /> : <Thumb url={c.coverUrl} />
+  if (!c.previewUrl) return thumb
+  const url = c.previewUrl
+  return (
+    <button
+      type="button"
+      onClick={() => usePreview.getState().toggle(c.id, url)}
+      aria-label={playing ? `Pausar o trecho de ${c.title}` : `Ouvir um trecho de ${c.title}`}
+      aria-pressed={playing}
+      className="relative shrink-0 overflow-hidden rounded-xl transition-transform active:scale-95"
+    >
+      {thumb}
+      <span className={cn('absolute inset-0 grid place-items-center transition-colors', active ? 'bg-black/40' : 'bg-black/20')}>
+        <span className={cn('grid size-7 place-items-center rounded-full shadow-card', active ? 'bg-primary text-primary-ink' : 'bg-white/95 text-[#16161d]')}>
+          {playing ? <Pause className="size-3.5 fill-current" /> : <Play className="ml-0.5 size-3.5 fill-current" />}
+        </span>
+      </span>
+      {active && (
+        <span className="absolute inset-x-0 bottom-0 h-[3px] bg-white/30">
+          <span className="block h-full bg-white transition-[width] duration-200" style={{ width: `${progress * 100}%` }} />
+        </span>
+      )}
+    </button>
+  )
+}
+
 function SearchResults({ results, error, query, onChoose }: { results: SongCandidate[] | null; error: string | null; query: string; onChoose: (c: SongCandidate) => void }) {
   if (error) return <p className="px-5 py-4 text-[13.5px] font-semibold text-rose-ink">{error}</p>
   if (!results) return null
@@ -286,9 +327,15 @@ function SearchResults({ results, error, query, onChoose }: { results: SongCandi
     <div>
       <ul className="divide-y divide-line">
         {results.map((c, i) => (
-          <motion.li key={c.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 6) * 0.03 }}>
-            <button type="button" onClick={() => onChoose(c)} className="flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-surface-2 active:bg-surface-2">
-              {isYouTubeCandidate(c) ? <VideoThumb id={videoId(c)} /> : <Thumb url={c.coverUrl} />}
+          <motion.li
+            key={c.id}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: Math.min(i, 6) * 0.03 }}
+            className="flex items-center gap-3 px-5 py-2.5 transition-colors hover:bg-surface-2"
+          >
+            <PreviewThumb c={c} />
+            <button type="button" onClick={() => onChoose(c)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className="truncate text-[15px] font-bold text-ink">{c.title}</span>
@@ -303,8 +350,9 @@ function SearchResults({ results, error, query, onChoose }: { results: SongCandi
           </motion.li>
         ))}
       </ul>
-      <p className="px-5 pt-1 pb-2 text-right text-[11px] font-semibold text-muted">
-        {results.some(isYouTubeCandidate) ? 'Resultados do YouTube' : results.some((r) => r.id.startsWith('deezer:')) ? 'Catálogo: Deezer' : null}
+      <p className="flex items-center justify-between gap-3 px-5 pt-1 pb-2 text-[11px] font-semibold text-muted">
+        <span>{results.some((r) => r.previewUrl) && 'Toque na imagem para ouvir um trecho'}</span>
+        <span className="shrink-0">{results.some(isYouTubeCandidate) ? 'YouTube' : results.some((r) => r.id.startsWith('deezer:')) ? 'Deezer' : null}</span>
       </p>
     </div>
   )
@@ -315,42 +363,29 @@ function SearchResults({ results, error, query, onChoose }: { results: SongCandi
 // ---------------------------------------------------------------------------
 
 function PickedSong({ candidate, song, onReset }: { candidate: SongCandidate; song: Song; onReset: () => void }) {
-  const audio = useRef<HTMLAudioElement | null>(null)
-  const [playing, setPlaying] = useState(false)
-  const [video, setVideo] = useState(false)
-  const youtube = isYouTubeCandidate(candidate) ? parseMediaUrl(candidate.link) : null
-  useEffect(() => () => audio.current?.pause(), [])
-  const toggle = () => {
-    // Vídeo do YouTube: abre o player aqui mesmo, no app.
-    if (youtube) return setVideo((v) => !v)
-    if (!candidate.previewUrl) return
-    audio.current ??= new Audio(candidate.previewUrl)
-    const a = audio.current
-    a.onended = () => setPlaying(false)
-    if (a.paused) {
-      void a.play().then(() => setPlaying(true)).catch(() => toast('Não deu para tocar a prévia'))
-    } else {
-      a.pause()
-      setPlaying(false)
-    }
-  }
+  const playing = usePreview((s) => s.id === candidate.id && s.playing)
+  const progress = usePreview((s) => (s.id === candidate.id ? s.progress : 0))
+  const youtube = isYouTubeCandidate(candidate)
+  const url = candidate.previewUrl
   return (
     <div className="relative overflow-hidden px-5 pt-5 pb-4">
       <div className="absolute inset-0 bg-primary-soft opacity-70" />
       <div className="relative flex items-center gap-4">
         <div className="relative shrink-0">
           <SongCover song={{ ...song, coverUrl: song.coverUrl ?? candidate.coverUrl }} size={88} />
-          {(youtube || candidate.previewUrl) && (
+          {url && (
             <button
               type="button"
-              onClick={toggle}
-              aria-label={youtube ? (video ? 'Fechar o vídeo' : 'Ouvir no YouTube aqui no app') : playing ? 'Pausar prévia' : 'Ouvir prévia'}
-              className={cn(
-                'absolute -right-2 -bottom-2 grid size-10 place-items-center rounded-full shadow-float transition-transform active:scale-90',
-                youtube ? 'bg-[#ff0033] text-white' : 'bg-primary text-primary-ink',
-              )}
+              onClick={() => usePreview.getState().toggle(candidate.id, url)}
+              aria-label={playing ? 'Pausar o trecho' : 'Ouvir um trecho'}
+              aria-pressed={playing}
+              className="absolute -right-2 -bottom-2 grid size-10 place-items-center rounded-full bg-primary text-primary-ink shadow-float transition-transform active:scale-90"
             >
-              {playing || video ? <Pause className="size-4" fill="currentColor" /> : <Play className="ml-0.5 size-4" fill="currentColor" />}
+              <svg viewBox="0 0 40 40" className="pointer-events-none absolute inset-0 size-full -rotate-90" aria-hidden>
+                <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" strokeOpacity={0.25} strokeWidth="3" />
+                <circle cx="20" cy="20" r="18.5" fill="none" stroke="currentColor" strokeWidth="3" strokeDasharray={116.24} strokeDashoffset={116.24 * (1 - progress)} strokeLinecap="round" />
+              </svg>
+              {playing ? <Pause className="size-4" fill="currentColor" /> : <Play className="ml-0.5 size-4" fill="currentColor" />}
             </button>
           )}
         </div>
@@ -358,14 +393,13 @@ function PickedSong({ candidate, song, onReset }: { candidate: SongCandidate; so
           <div className="truncate text-[19px] leading-tight font-extrabold tracking-tight text-ink">{song.title || candidate.title}</div>
           <div className="mt-0.5 truncate text-[14px] font-semibold text-ink-2">{song.artist || candidate.artist}</div>
           <div className="mt-0.5 truncate text-[12.5px] text-muted">
-            {[youtube ? 'YouTube' : null, candidate.version, candidate.album, formatDuration(candidate.durationSec)].filter(Boolean).join(' · ')}
+            {[youtube ? 'YouTube' : null, candidate.version, !youtube ? candidate.album : null, formatDuration(candidate.durationSec)].filter(Boolean).join(' · ')}
           </div>
         </div>
         <button type="button" onClick={onReset} aria-label="Escolher outra música" className="grid size-9 shrink-0 place-items-center self-start rounded-full bg-surface/70 text-ink-2 hover:bg-surface">
           <X className="size-4" />
         </button>
       </div>
-      {youtube && video && <MediaEmbed link={youtube} title={song.title || candidate.title} autoLoad className="relative mt-4 rounded-2xl" />}
     </div>
   )
 }
@@ -546,59 +580,56 @@ function FillProgress({
 }
 
 // ---------------------------------------------------------------------------
-// Cifra e letra (o passo da equipe)
+// Cifra e letra (entram sozinhas)
 // ---------------------------------------------------------------------------
 
-function CifraStep({ song, cifraUrl, onPaste, onOpenPaste, onShowSheet }: { song: Song; cifraUrl: string | null; onPaste: () => void; onOpenPaste: () => void; onShowSheet: () => void }) {
-  const hasCifra = !!song.content.trim()
-  const sections = hasCifra ? parseSheet(song.content).sections.filter((s) => s.label).length : 0
-  const key = song.originalKey ?? detectKeyFromText(song.content)
-  const href = cifraUrl ?? (song.title ? chordSearchUrl(song.title, song.artist) : undefined)
+const hostOf = (url: string | null) => {
+  try {
+    return url ? new URL(url).hostname.replace(/^www\./, '') : null
+  } catch {
+    return null
+  }
+}
+
+function CifraStep({ song, sourceUrl, busy, onFind, onShowSheet }: { song: Song; sourceUrl: string | null; busy: boolean; onFind: () => void; onShowSheet: () => void }) {
+  const hasText = !!song.content.trim()
+  const doc = hasText ? parseSheet(song.content) : null
+  const sections = doc ? doc.sections.filter((s) => s.label).length : 0
+  const hasChords = !!doc?.sections.some((s) => s.lines.some((l) => l.kind === 'chords' || (l.kind === 'lyric' && l.pieces.some((p) => p.chord))))
+  const key = hasChords ? (song.originalKey ?? detectKeyFromText(song.content)) : null
+  const host = hostOf(sourceUrl)
+  const state = hasText ? 'done' : busy ? 'busy' : 'missing'
   return (
     <div className="border-t border-line bg-surface-2/50 px-5 py-4">
       <div className="flex items-center gap-3">
-        <span className={cn('grid size-8 shrink-0 place-items-center rounded-xl', hasCifra ? 'bg-primary text-primary-ink' : 'bg-butter text-butter-ink')}>
-          {hasCifra ? <Check className="size-4" strokeWidth={3} /> : <FileText className="size-4" />}
+        <span
+          className={cn(
+            'grid size-8 shrink-0 place-items-center rounded-xl',
+            state === 'done' ? 'bg-primary text-primary-ink' : state === 'busy' ? 'bg-primary-soft text-primary' : 'bg-butter text-butter-ink',
+          )}
+        >
+          {state === 'done' ? <Check className="size-4" strokeWidth={3} /> : state === 'busy' ? <Loader2 className="size-4 animate-spin" /> : <FileText className="size-4" />}
         </span>
         <div className="min-w-0 flex-1">
-          <div className="text-[14.5px] font-extrabold text-ink">Cifra e letra</div>
-          {hasCifra ? (
-            <div className="text-[12.5px] text-muted">
-              {[key && `Tom ${prettyAccidentals(key)}`, plural(sections, 'seção', 'seções')].filter(Boolean).join(' · ')}
-            </div>
-          ) : (
-            <div className="text-[12.5px] text-muted">Abra a cifra, copie tudo e cole aqui</div>
-          )}
-        </div>
-        {hasCifra && (
-          <div className="flex shrink-0 gap-1">
-            <Button size="sm" variant="ghost" onClick={onOpenPaste}>
-              Trocar
-            </Button>
-            <Button size="sm" variant="soft" onClick={onShowSheet}>
-              Ver
-            </Button>
+          <div className="text-[14.5px] font-extrabold text-ink">{state === 'missing' ? 'Cifra não encontrada' : hasChords || !hasText ? 'Cifra e letra' : 'Letra'}</div>
+          <div className={cn('text-[12.5px] text-muted', state !== 'missing' && 'truncate')}>
+            {state === 'done'
+              ? [hasChords ? key && `Tom ${prettyAccidentals(key)}` : 'Sem acordes por enquanto', sections ? plural(sections, 'seção', 'seções') : null, host].filter(Boolean).join(' · ')
+              : state === 'busy'
+                ? 'Buscando no Cifra Club…'
+                : 'O site pode ter demorado a responder.'}
           </div>
+        </div>
+        {state === 'done' && (
+          <Button size="sm" variant="soft" onClick={onShowSheet}>
+            Ver
+          </Button>
         )}
       </div>
-      {!hasCifra && (
-        <div className="mt-3 grid grid-cols-2 gap-2">
-          <a
-            href={href}
-            target="_blank"
-            rel="noreferrer"
-            aria-disabled={!href}
-            className={cn(
-              'inline-flex h-11 items-center justify-center gap-2 rounded-full border border-line bg-surface px-4 text-[14px] font-bold text-ink hover:bg-surface-2',
-              !href && 'pointer-events-none opacity-50',
-            )}
-          >
-            Abrir a cifra <ExternalLink className="size-3.5 text-muted" />
-          </a>
-          <Button icon={ClipboardPaste} onClick={onPaste}>
-            Colar cifra
-          </Button>
-        </div>
+      {state === 'missing' && (
+        <Button size="sm" variant="soft" icon={RotateCw} onClick={onFind} className="mt-3 ml-11">
+          Buscar de novo
+        </Button>
       )}
     </div>
   )
