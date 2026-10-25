@@ -4,7 +4,9 @@
 //   { action: 'buscar', q }        → músicas do catálogo do Deezer (título, artista, álbum, capa, duração)
 //   { action: 'completar', … }     → ficha da música escolhida: vídeo oficial, Spotify, página da cifra,
 //                                     tom, BPM, compasso, ritmo, temas, momentos, significado, referências
-//                                     bíblicas e notas de arranjo (Claude com busca na web)
+//                                     bíblicas, notas de arranjo (Claude com busca na web) e a cifra+letra
+//                                     extraídas da página citada (extrair-cifra.ts)
+//   { action: 'cifra', … }         → só a cifra+letra de uma música (título, artista e, se houver, o link)
 //   { action: 'metadata', url }    → título, artista, capa e duração de um link do YouTube/Spotify
 //   { action: 'analisar', … }      → ficha a partir da letra que o membro colou
 //
@@ -15,11 +17,12 @@
 // O app usa a chave publicável (sb_publishable_…), que o verify_jwt da plataforma não
 // entende; por isso a função confere o login de quem chama ela mesma (signedIn, abaixo).
 //
-// Letra e cifra têm direitos autorais e nenhum serviço licencia esse conteúdo para um app como
-// este: a função não baixa nem escreve letras ou cifras. Ela acha o endereço da página da cifra
-// (para a equipe abrir e copiar) e reúne dados públicos: links oficiais, tom, BPM e compasso.
+// A cifra e a letra são extraídas do texto já publicado na página citada (nunca inventadas) e
+// chegam ao app com a fonte para atribuição. A responsabilidade de ter licença para reproduzir
+// o conteúdo (ex.: CCLI) é do ministério — a mesma que vale para o texto colado à mão.
 
 import Anthropic from 'npm:@anthropic-ai/sdk@0.135.0'
+import { fetchSheet } from './extrair-cifra.ts'
 
 const MODEL = 'claude-opus-5-5'
 
@@ -410,9 +413,15 @@ async function complete(input: CompleteInput) {
   ])
 
   const base = { ia: false, year: track?.year ?? null, bpm: track?.bpm ?? null }
-  if ('error' in ai) return { ...base, aiError: ai.error }
+  const f = 'error' in ai ? null : ai.ficha
+  const aiErr = 'error' in ai ? ai.error : null
+  const sources = 'error' in ai ? [] : ai.sources
 
-  const f = ai.ficha
+  // Cifra e letra: extrai o texto da página citada pela IA (ou tenta adivinhar a página).
+  const sheet = await fetchSheet(title, clean(input.artist), f?.cifraUrl ? safeUrl(f.cifraUrl) : null).catch(() => null)
+
+  if (!f) return { ...base, aiError: aiErr, content: sheet?.content ?? null, sourceUrl: sheet?.sourceUrl ?? null }
+
   const [youtubeUrl, spotifyUrl] = await Promise.all([checkYouTube(f.youtubeUrl), checkSpotify(f.spotifyUrl)])
   return {
     ...base,
@@ -420,7 +429,7 @@ async function complete(input: CompleteInput) {
     youtubeUrl,
     spotifyUrl,
     cifraUrl: safeUrl(f.cifraUrl),
-    originalKey: cleanKey(f.originalKey),
+    originalKey: cleanKey(f.originalKey) ?? sheet?.originalKey ?? null,
     // O BPM do Deezer às vezes vem dobrado ou pela metade; o da pesquisa vem primeiro.
     bpm: plausibleBpm(f.bpm) ?? base.bpm,
     timeSignature: f.timeSignature && TIME_SIGNATURES.includes(f.timeSignature) ? f.timeSignature : null,
@@ -434,7 +443,9 @@ async function complete(input: CompleteInput) {
       .map(clean)
       .filter(Boolean)
       .join('\n'),
-    sources: ai.sources.slice(0, 8),
+    content: sheet?.content ?? null,
+    sourceUrl: sheet?.sourceUrl ?? null,
+    sources: sources.slice(0, 8),
   }
 }
 
@@ -562,6 +573,18 @@ async function analyze(input: AnalyzeInput) {
 }
 
 // ---------------------------------------------------------------------------
+// Cifra e letra
+// ---------------------------------------------------------------------------
+
+async function buscarCifra(input: { title?: string; artist?: string; cifraUrl?: string | null }) {
+  const title = clean(input.title)
+  if (!title) return { error: 'sem título' }
+  const sheet = await fetchSheet(title, clean(input.artist), safeUrl(input.cifraUrl ?? null))
+  if (!sheet) return { error: 'não encontrada' }
+  return { content: sheet.content, originalKey: sheet.originalKey, bpm: sheet.bpm, source: sheet.source, sourceUrl: sheet.sourceUrl }
+}
+
+// ---------------------------------------------------------------------------
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS })
@@ -578,6 +601,7 @@ Deno.serve(async (req) => {
       return json({ error: 'link não suportado' }, 400)
     }
     if (body.action === 'analisar') return json(await analyze(body as AnalyzeInput))
+    if (body.action === 'cifra') return json(await buscarCifra(body as { title?: string; artist?: string; cifraUrl?: string | null }))
     return json({ error: 'ação desconhecida' }, 400)
   } catch (e) {
     if (e instanceof Anthropic.RateLimitError) return json({ error: 'limite' }, 429)

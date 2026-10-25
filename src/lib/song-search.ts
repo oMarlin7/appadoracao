@@ -43,6 +43,10 @@ export interface SongDetails {
   bibleRefs: string[]
   arrangementNotes: string
   sources: Array<{ url: string; title: string }>
+  /** Cifra+letra extraídas da página da cifra (texto Cifra Club/ChordPro). */
+  content: string | null
+  /** Endereço da página de onde a cifra+letra foram extraídas. */
+  sourceUrl: string | null
 }
 
 const EMPTY_DETAILS: SongDetails = {
@@ -61,6 +65,8 @@ const EMPTY_DETAILS: SongDetails = {
   bibleRefs: [],
   arrangementNotes: '',
   sources: [],
+  content: null,
+  sourceUrl: null,
 }
 
 // ---------------------------------------------------------------------------
@@ -209,6 +215,8 @@ export function normalizeDetails(r: Partial<SongDetails>): SongDetails {
     bibleRefs: r.bibleRefs ?? [],
     meaning: r.meaning ?? '',
     arrangementNotes: r.arrangementNotes ?? '',
+    content: r.content ?? null,
+    sourceUrl: r.sourceUrl ?? null,
     sources: r.sources ?? [],
   }
 }

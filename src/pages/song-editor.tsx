@@ -35,6 +35,7 @@ import { detectKeyFromText, tempoFromBpm } from '@/lib/music/analyze'
 import { docLyrics, parseSheet, transposeText } from '@/lib/music/sheet'
 import { allKeys, makeSpeller, normalizeKeyName, prettyAccidentals, transposeKey } from '@/lib/music/theory'
 import { analyzeImport, analyzeLocally, analyzeWithAI, aiAvailable, draftMeaning, fetchLinkMetadata, type ImportAnalysis, type LinkMetadata, type SongAnalysis } from '@/lib/song-import'
+import { fetchSongSheet } from '@/lib/cifra-search'
 import type { SongCandidate, SongDetails } from '@/lib/song-search'
 import { useRow, useSettings } from '@/lib/store'
 import { MOMENTS, TEMPOS, THEME_BY_ID, groupThemes, suggestMoments, suggestThemes } from '@/lib/taxonomy'
@@ -125,6 +126,7 @@ export function SongEditorPage() {
   const [saving, setSaving] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [autoPaste, setAutoPaste] = useState(false)
+  const [fetchingSheet, setFetchingSheet] = useState(false)
   const [batchOpen, setBatchOpen] = useState(false)
   const [themeSheet, setThemeSheet] = useState(false)
   const [allThemes, setAllThemes] = useState(false)
@@ -207,13 +209,61 @@ export function SongEditorPage() {
     } else setAnalysis({ state: 'done', source: 'local' })
   }
 
+  /** Aplica a cifra+letra extraídas automaticamente (sem apagar o que foi digitado à mão). */
+  const applyImportedSheet = (content: string) => {
+    const a = analyzeImport(content)
+    if (!a.content.trim()) return null
+    applyAuto(
+      compactPatch({
+        content: a.content,
+        originalKey: a.key ? normalizeKeyName(a.key) : undefined,
+        bpm: a.bpm ?? undefined,
+        tempo: tempoFromBpm(a.bpm) ?? undefined,
+      }),
+    )
+    return a
+  }
+
+  /** "Buscar cifra e letra": extrai do servidor e aplica direto. */
+  const autoFetchSheet = async () => {
+    if (!song.title.trim()) return
+    setFetchingSheet(true)
+    const r = await fetchSongSheet(song.title, song.artist)
+    setFetchingSheet(false)
+    if (!r.ok) {
+      toast.error(
+        r.reason === 'sem-servidor' ? 'A busca automática funciona com o app conectado ao servidor.' : 'Não encontrei a cifra automaticamente.',
+        { description: 'Você ainda pode abrir a página da cifra e colar o texto aqui.' },
+      )
+      return
+    }
+    const a = analyzeImport(r.content)
+    if (!a.content.trim()) {
+      toast.error('Não encontrei a cifra automaticamente.')
+      return
+    }
+    applyAuto(
+      compactPatch({
+        content: a.content,
+        originalKey: a.key ? normalizeKeyName(a.key) : undefined,
+        bpm: a.bpm ?? undefined,
+        tempo: tempoFromBpm(a.bpm) ?? undefined,
+      }),
+    )
+    const host = r.sourceUrl ? (() => { try { return new URL(r.sourceUrl).hostname.replace(/^www\./, '') } catch { return null } })() : null
+    toast.success('Cifra e letra importadas', { description: compactJoin([host && `Fonte: ${host}`, a.key && `Tom ${a.key}`, a.chordCount ? `${a.chordCount} acordes` : null]) })
+    if (analysis.source !== 'ia') void runAnalysis({ title: song.title, artist: song.artist, content: a.content, bpm: song.bpm ?? a.bpm ?? null, tempo: song.tempo }, true)
+  }
+
   /** Ficha completa da busca pelo nome (sem IA: sugestões pelo título e o BPM do catálogo). */
   const applyDetails = (d: SongDetails | null, c: SongCandidate) => {
     if (!d?.ia) {
+      if (d?.content) applyImportedSheet(d.content)
       if (d?.bpm) applyAuto({ bpm: d.bpm })
-      void runAnalysis({ title: c.title, artist: c.artist, content: '', bpm: d?.bpm ?? null, tempo: null }, false)
+      void runAnalysis({ title: c.title, artist: c.artist, content: d?.content ?? '', bpm: d?.bpm ?? null, tempo: null }, false)
       return
     }
+    if (d.content) applyImportedSheet(d.content)
     const yt = parseMediaUrl(d.youtubeUrl)
     applyAuto(
       compactPatch({
@@ -638,6 +688,9 @@ export function SongEditorPage() {
                   ]}
                 />
                 <div className="flex items-center gap-1">
+                  <Button variant="ghost" size="sm" icon={Sparkles} loading={fetchingSheet} disabled={!song.title.trim() || !!song.content.trim()} onClick={() => void autoFetchSheet()}>
+                    Buscar cifra
+                  </Button>
                   <Button variant="ghost" size="sm" icon={ClipboardPaste} onClick={() => setImportOpen(true)}>
                     Colar
                   </Button>

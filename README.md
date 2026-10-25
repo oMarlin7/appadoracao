@@ -19,11 +19,11 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 **Cadastro pelo nome (o jeito principal de cadastrar)**
 1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem as gravações do catálogo do Deezer com capa, álbum, versão (*Ao Vivo*, *Playback*…) e duração.
 2. **Toque na gravação certa** (dá para ouvir 30 segundos e trocar, se não for ela) e o app monta a ficha sozinho, passo a passo na tela: **vídeo oficial** no YouTube, faixa no **Spotify**, capa, **tom original, BPM e compasso**, ritmo, **temas e momentos do culto**, **significado**, **referências bíblicas** e **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina) — com as fontes consultadas.
-3. **Cifra e letra**: o app já encontra a página da cifra. Abra, copie e toque em **Colar cifra** (ou envie um arquivo **ChordPro/TXT**): ele separa acordes, letra e seções e confere o tom.
+3. **Cifra e letra**: o app encontra a página da cifra e **importa o texto automaticamente** (acordes + letra), mostrando a fonte. Se não achar, dá para **Abrir a cifra**, copiar e tocar em **Colar cifra** (ou enviar um arquivo **ChordPro/TXT**): ele separa acordes, letra e seções e confere o tom.
 4. Confira e salve. Tudo continua editável, e o **BPM no toque** fica à mão para ajustar o andamento.
 - Também dá para **colar um link** do YouTube/Spotify, cadastrar **vários links de uma vez** (marcadas como *sem-cifra* para completar depois) ou **preencher à mão**.
 
-> Letras e cifras têm direitos autorais e nenhum serviço as oferece com licença para um app como este — por isso o app não as baixa nem as inventa: ele acha a página da cifra e a equipe cola o texto. Quem tem licença CCLI pode baixar as cifras do SongSelect em ChordPro e enviar pelo botão **Arquivo**.
+> Letras e cifras têm direitos autorais: o app importa o texto já publicado na página citada (nunca o inventa) e mostra a fonte. A responsabilidade de ter licença para reproduzir o conteúdo — ex.: CCLI — é do ministério, a mesma que vale para o texto colado à mão.
 
 **Cifras e letras**
 - Transposição instantânea com a grafia correta (B♭ em Fá, A♯ em Mi; diminutos de passagem com ♯).
@@ -146,7 +146,7 @@ Pronto: o banco chama a função a cada minuto e ela envia só o que for novo. A
 O líder pode promover outros líderes na tela **Equipe**. Para tirar alguém da equipe, exclua o usuário no painel do Supabase (*Authentication → Users*): o perfil sai junto com as favoritas, playlists e mensagens dessa pessoa (as músicas e cultos que ela cadastrou continuam).
 
 ### 4. Cadastrar as músicas
-- **Nova música → digite a música e o artista → toque na gravação certa → Colar cifra**, confira a ficha e salve. Para começar rápido, use **Vários links de uma vez** e complete as cifras depois (busque por *sem-cifra* em Músicas).
+- **Nova música → digite a música e o artista → toque na gravação certa**: a ficha, a cifra e a letra entram sozinhas. Confira e salve. Para começar rápido, use **Vários links de uma vez** e complete as cifras depois (busque por *sem-cifra* em Músicas).
 - Quer começar com exemplos? **Ajustes → Adicionar músicas de exemplo** (e depois *Remover músicas de exemplo*).
 - Testou no modo demonstração e quer levar as músicas? No demo, **Ajustes → Exportar músicas**; no app oficial, **Ajustes → Importar músicas**.
 
