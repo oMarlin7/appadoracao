@@ -1,7 +1,8 @@
 // Supabase Edge Function · importar-musica
 //
 // Ações, chamadas pelo app (só membros logados):
-//   { action: 'buscar', q }        → músicas do catálogo do Deezer (título, artista, álbum, capa, duração)
+//   { action: 'buscar', q }        → vídeos do YouTube (título, canal, capa, duração); Deezer e iTunes só
+//                                     quando o YouTube não responde
 //   { action: 'completar', … }     → ficha da música escolhida: vídeo oficial, Spotify, página da cifra,
 //                                     tom, BPM, compasso, ritmo, temas, momentos, significado, referências
 //                                     bíblicas, notas de arranjo (Claude com busca na web) e a cifra+letra
@@ -13,6 +14,7 @@
 // Publicar:  supabase functions deploy importar-musica --no-verify-jwt
 // Chave IA:  supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   (sem ela, a busca e os links
 //            funcionam; a ficha completa precisa da chave)
+// YouTube:   supabase secrets set YOUTUBE_API_KEY=...   (YouTube Data API v3; sem ela, a busca usa o Deezer)
 //
 // O app usa a chave publicável (sb_publishable_…), que o verify_jwt da plataforma não
 // entende; por isso a função confere o login de quem chama ela mesma (signedIn, abaixo).
@@ -203,6 +205,47 @@ async function searchItunes(q: string): Promise<Candidate[]> {
   }))
 }
 
+/** "PT4M5S" → 245 */
+function isoDuration(d: string | undefined): number | null {
+  const m = /^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$/.exec(d ?? '')
+  return m ? Number(m[1] ?? 0) * 3600 + Number(m[2] ?? 0) * 60 + Number(m[3] ?? 0) || null : null
+}
+
+interface YouTubeVideo {
+  id: string
+  snippet?: { title?: string; channelTitle?: string }
+  contentDetails?: { duration?: string }
+}
+
+/**
+ * Busca no YouTube pela API oficial (YouTube Data API v3). Devolve o título do vídeo e o canal
+ * como vieram; o app separa "Artista - Música" (mesma regra do link colado).
+ */
+async function searchYouTube(q: string, key: string): Promise<Candidate[]> {
+  const params = new URLSearchParams({ part: 'id', type: 'video', videoEmbeddable: 'true', maxResults: '15', regionCode: 'BR', relevanceLanguage: 'pt', q, key })
+  const found = await fetchJson<{ items?: Array<{ id?: { videoId?: string } }> }>(`https://www.googleapis.com/youtube/v3/search?${params}`)
+  const ids = (found.items ?? []).map((i) => i.id?.videoId).filter((id): id is string => !!id && /^[\w-]{11}$/.test(id))
+  if (!ids.length) return []
+  const videos = await fetchJson<{ items?: YouTubeVideo[] }>(`https://www.googleapis.com/youtube/v3/videos?part=snippet,contentDetails&id=${ids.join(',')}&key=${encodeURIComponent(key)}`)
+  const byId = new Map((videos.items ?? []).map((v) => [v.id, v]))
+  return ids
+    .map((id) => byId.get(id))
+    .filter((v): v is YouTubeVideo => !!v)
+    .map((v) => ({
+      id: `youtube:${v.id}`,
+      title: clean(v.snippet?.title),
+      version: null,
+      artist: clean(v.snippet?.channelTitle),
+      album: null,
+      coverUrl: `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`,
+      durationSec: isoDuration(v.contentDetails?.duration),
+      previewUrl: null,
+      link: `https://www.youtube.com/watch?v=${v.id}`,
+    }))
+    // Fora os Shorts e as transmissões/compilações longas.
+    .filter((c) => !c.durationSec || (c.durationSec >= 60 && c.durationSec <= 20 * 60))
+}
+
 /** Tira repetições (a mesma faixa em coletâneas), mantendo a ordem de relevância. */
 function dedupe(list: Candidate[]): Candidate[] {
   const seen = new Set<string>()
@@ -220,6 +263,16 @@ function dedupe(list: Candidate[]): Candidate[] {
 async function search(q: string) {
   const query = clean(q).slice(0, 120)
   if (query.length < 2) return { results: [], source: null }
+  // O YouTube vem primeiro. Deezer e iTunes só se ele não responder (sem chave, cota do dia no fim…).
+  const ytKey = Deno.env.get('YOUTUBE_API_KEY')
+  if (ytKey) {
+    try {
+      const results = dedupe(await searchYouTube(query, ytKey))
+      if (results.length) return { results, source: 'youtube' }
+    } catch (e) {
+      console.warn('[busca] YouTube não respondeu:', e instanceof Error ? e.message : e)
+    }
+  }
   try {
     return { results: dedupe(await searchDeezer(query)), source: 'deezer' }
   } catch {
@@ -327,16 +380,24 @@ type Research = { ficha: Ficha; sources: Array<{ url: string; title: string }> }
 /** A função do Supabase é encerrada aos 150 s: a pesquisa inteira cabe em menos que isso. */
 const RESEARCH_BUDGET_MS = 115_000
 
+/** Vídeo do YouTube que a equipe escolheu na busca (o app abre o player dele). */
+const chosenVideo = (input: CompleteInput) => {
+  const id = /^youtube:([\w-]{11})$/.exec(input.id ?? '')?.[1]
+  return id ? `https://www.youtube.com/watch?v=${id}` : null
+}
+
 async function research(input: CompleteInput, apiKey: string): Promise<Research> {
   const client = new Anthropic({ apiKey })
   const deadline = Date.now() + RESEARCH_BUDGET_MS
   const themes = input.themes ?? []
   const moments = input.moments ?? []
+  const video = chosenVideo(input)
   const song = [
     `Música: ${clean(input.title)}`,
     `Artista: ${clean(input.artist) || '(não informado)'}`,
     input.album ? `Álbum: ${clean(input.album)}` : null,
     mmss(input.durationSec) ? `Duração: ${mmss(input.durationSec)}` : null,
+    video ? `Vídeo do YouTube escolhido pela equipe (use este em youtubeUrl; não procure outro): ${video}` : null,
   ]
     .filter(Boolean)
     .join('\n')
@@ -422,7 +483,7 @@ async function complete(input: CompleteInput) {
 
   if (!f) return { ...base, aiError: aiErr, content: sheet?.content ?? null, sourceUrl: sheet?.sourceUrl ?? null }
 
-  const [youtubeUrl, spotifyUrl] = await Promise.all([checkYouTube(f.youtubeUrl), checkSpotify(f.spotifyUrl)])
+  const [youtubeUrl, spotifyUrl] = await Promise.all([chosenVideo(input) ?? checkYouTube(f.youtubeUrl), checkSpotify(f.spotifyUrl)])
   return {
     ...base,
     ia: true,

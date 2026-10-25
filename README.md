@@ -17,8 +17,8 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 - **Músicas organizadas** por 35 temas em grupos (Quem Deus é, Obra de Cristo, Nossa resposta, Vida com Deus, Espírito & Igreja, Datas) — de *Adoração* e *Cruz & Sangue* a temas bem específicos como *Fidelidade de Deus*, *Nome de Jesus*, *Arrependimento*, *Refúgio & Proteção*, *Família*, *Volta de Jesus* e *Recomeço* — mais os **temas criados pela própria equipe** (com cor, ícone e palavras que o app reconhece nas letras). Também 11 momentos do culto, ritmo, tom, etiquetas, significado e referências bíblicas. Busca sem acento por título, artista, **trecho da letra** ou referência (“sl 23” acha Salmos 23).
 
 **Cadastro pelo nome (o jeito principal de cadastrar)**
-1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem as gravações do catálogo do Deezer com capa, álbum, versão (*Ao Vivo*, *Playback*…) e duração.
-2. **Toque na gravação certa** (dá para ouvir 30 segundos e trocar, se não for ela) e o app monta a ficha sozinho, passo a passo na tela: **vídeo oficial** no YouTube, faixa no **Spotify**, capa, **tom original, BPM e compasso**, ritmo, **temas e momentos do culto**, **significado**, **referências bíblicas** e **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina) — com as fontes consultadas.
+1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem os **vídeos do YouTube**, com música e artista já separados, versão (*Ao Vivo*, *Playback*…) e duração. O catálogo do Deezer só entra se o YouTube não responder.
+2. **Toque no vídeo certo** (dá para **ouvir no YouTube ali mesmo, dentro do app**, e trocar, se não for ele) e o app monta a ficha sozinho, com esse vídeo guardado na música, passo a passo na tela: **vídeo oficial** no YouTube, faixa no **Spotify**, capa, **tom original, BPM e compasso**, ritmo, **temas e momentos do culto**, **significado**, **referências bíblicas** e **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina) — com as fontes consultadas.
 3. **Cifra e letra**: o app encontra a página da cifra e **importa o texto automaticamente** (acordes + letra), mostrando a fonte. Se não achar, dá para **Abrir a cifra**, copiar e tocar em **Colar cifra** (ou enviar um arquivo **ChordPro/TXT**): ele separa acordes, letra e seções e confere o tom.
 4. Confira e salve. Tudo continua editável, e o **BPM no toque** fica à mão para ajustar o andamento.
 - Também dá para **colar um link** do YouTube/Spotify, cadastrar **vários links de uma vez** (marcadas como *sem-cifra* para completar depois) ou **preencher à mão**.
@@ -129,7 +129,26 @@ supabase functions deploy importar-musica --no-verify-jwt   # a própria funçã
 supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts). Ela só atende membros logados e nunca baixa nem escreve letras ou cifras. A busca usa o catálogo público do [Deezer](https://developers.deezer.com).
+A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts) e só atende membros logados. A cifra vem do bloco de texto da página citada com os espaços intactos, então cada acorde fica em cima da sílaba certa.
+
+#### Busca no YouTube (chave gratuita do Google)
+A busca pelo nome procura primeiro no YouTube, pela API oficial. Sem a chave, ela usa o catálogo do [Deezer](https://developers.deezer.com) — o resto funciona igual.
+
+1. Em [console.cloud.google.com](https://console.cloud.google.com), crie um projeto (ex.: *Adoração*).
+2. **APIs e serviços → Biblioteca** → procure **YouTube Data API v3** → **Ativar**.
+3. **APIs e serviços → Credenciais → Criar credenciais → Chave de API**. Em **Restringir chave**, marque só a *YouTube Data API v3*.
+4. No painel do Supabase: **Edge Functions → Secrets → Add new secret**, nome `YOUTUBE_API_KEY`, valor = a chave.
+
+**Custo**: nenhum, não precisa de cartão. A cota gratuita dá cerca de **100 buscas por dia** para a equipe toda (o app só busca quando a pessoa para de digitar e não repete uma busca já feita). Se a cota do dia acabar, a busca passa sozinha para o Deezer até o dia seguinte.
+
+#### Testar antes de publicar
+O branch de produção da Vercel publica direto no app oficial. Para testar uma mudança antes, publique num branch separado: a Vercel gera um **link de pré-visualização** com o app completo, ligado ao mesmo banco. Nesse link a importação usa a cópia `importar-musica-teste` da função (variável `VITE_IMPORT_FUNCTION`, definida na Vercel só para pré-visualizações), então a função oficial só muda depois de aprovada:
+
+```bash
+supabase functions deploy importar-musica-teste --no-verify-jwt   # a cópia, com o código novo
+```
+
+Como o banco é o mesmo, o que for salvo no teste (músicas, cultos…) aparece no app oficial.
 
 ### Notificações no celular
 1. Publique a função: `supabase functions deploy notificar --no-verify-jwt`.

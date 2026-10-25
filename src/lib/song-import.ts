@@ -1,4 +1,4 @@
-import { backend, isDemo } from './backend'
+import { backend, IMPORT_FUNCTION, isDemo } from './backend'
 import { analyzeImport, tempoFromBpm, type ImportAnalysis } from './music/analyze'
 import { splitVideoTitle, tidy, youtubeThumb, type MediaLink } from './media'
 import { MOMENTS, MOMENT_BY_ID, THEMES, THEME_BY_ID, suggestMoments, suggestThemes, type Tempo } from './taxonomy'
@@ -77,7 +77,7 @@ export async function fetchLinkMetadata(link: MediaLink): Promise<LinkMetadata> 
   const tasks: Array<() => Promise<LinkMetadata>> = []
   if (!isDemo)
     tasks.push(async () => {
-      const r = await backend.invoke<Partial<LinkMetadata> & { rawTitle?: string; author?: string; error?: string }>('importar-musica', {
+      const r = await backend.invoke<Partial<LinkMetadata> & { rawTitle?: string; author?: string; error?: string }>(IMPORT_FUNCTION, {
         action: 'metadata',
         url: link.url,
       })
@@ -150,7 +150,7 @@ export const aiAvailable = () => !aiUnavailable
 export async function analyzeWithAI(input: { title: string; artist: string; lyrics: string }): Promise<SongAnalysis | null> {
   if (aiUnavailable) return null
   try {
-    const r = await backend.invoke<Partial<SongAnalysis> & { error?: string }>('importar-musica', {
+    const r = await backend.invoke<Partial<SongAnalysis> & { error?: string }>(IMPORT_FUNCTION, {
       action: 'analisar',
       title: input.title,
       artist: input.artist,

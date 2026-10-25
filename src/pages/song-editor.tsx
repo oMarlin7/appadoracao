@@ -36,7 +36,7 @@ import { docLyrics, parseSheet, transposeText } from '@/lib/music/sheet'
 import { allKeys, makeSpeller, normalizeKeyName, prettyAccidentals, transposeKey } from '@/lib/music/theory'
 import { analyzeImport, analyzeLocally, analyzeWithAI, aiAvailable, draftMeaning, fetchLinkMetadata, type ImportAnalysis, type LinkMetadata, type SongAnalysis } from '@/lib/song-import'
 import { fetchSongSheet } from '@/lib/cifra-search'
-import type { SongCandidate, SongDetails } from '@/lib/song-search'
+import { isYouTubeCandidate, type SongCandidate, type SongDetails } from '@/lib/song-search'
 import { useRow, useSettings } from '@/lib/store'
 import { MOMENTS, TEMPOS, THEME_BY_ID, groupThemes, suggestMoments, suggestThemes } from '@/lib/taxonomy'
 import { cn, plural } from '@/lib/utils'
@@ -267,7 +267,7 @@ export function SongEditorPage() {
     const yt = parseMediaUrl(d.youtubeUrl)
     applyAuto(
       compactPatch({
-        youtubeUrl: d.youtubeUrl,
+        youtubeUrl: isYouTubeCandidate(c) ? c.link : d.youtubeUrl,
         spotifyUrl: d.spotifyUrl,
         coverUrl: c.coverUrl ?? (yt?.provider === 'youtube' ? youtubeThumb(yt.id) : null),
         originalKey: d.originalKey,
@@ -406,7 +406,10 @@ export function SongEditorPage() {
             <SmartImport
               song={song}
               themes={themes}
-              onPick={(c) => applyAuto(compactPatch({ title: c.title, artist: c.artist, coverUrl: c.coverUrl }))}
+              onPick={(c) =>
+                // Vídeo escolhido no YouTube: já fica na música para ouvir dentro do app.
+                applyAuto(compactPatch({ title: c.title, artist: c.artist, coverUrl: c.coverUrl, youtubeUrl: isYouTubeCandidate(c) ? c.link : undefined }))
+              }
               onDetails={applyDetails}
               onLink={(link, meta) =>
                 applyAuto(

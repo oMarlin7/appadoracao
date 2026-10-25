@@ -1,4 +1,4 @@
-import { backend, isDemo } from './backend'
+import { backend, IMPORT_FUNCTION, isDemo } from './backend'
 
 /**
  * Busca automática de cifra e letra. A extração roda no servidor (o navegador não
@@ -15,7 +15,7 @@ export async function fetchSongSheet(title: string, artist: string, cifraUrl?: s
   if (!title.trim()) return { ok: false, reason: 'nao-encontrada' }
   try {
     const r = await backend.invoke<{ content?: string; originalKey?: string | null; sourceUrl?: string | null; source?: string; error?: string }>(
-      'importar-musica',
+      IMPORT_FUNCTION,
       { action: 'cifra', title: title.trim(), artist: artist.trim(), cifraUrl: cifraUrl ?? null },
     )
     if (!r || r.error || !r.content?.trim()) return { ok: false, reason: 'nao-encontrada' }

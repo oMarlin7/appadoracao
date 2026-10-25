@@ -1,18 +1,20 @@
-import { backend, isDemo } from './backend'
+import { backend, IMPORT_FUNCTION, isDemo } from './backend'
+import { cleanChannelName, splitVideoTitle } from './media'
 import { normalizeKeyName } from './music/theory'
 import { MOMENTS, type Tempo, type Theme } from './taxonomy'
 
 /**
- * Cadastro pelo nome: a equipe digita "música e artista", escolhe a faixa certa no catálogo
- * (Deezer) e o servidor completa a ficha com IA e busca na web — vídeo oficial, Spotify, página
- * da cifra, tom, BPM, compasso, temas, momentos, significado, referências e notas de arranjo.
+ * Cadastro pelo nome: a equipe digita "música e artista", escolhe o vídeo certo no YouTube (o
+ * Deezer só entra quando o YouTube não responde) e o servidor completa a ficha com IA e busca na
+ * web — Spotify, página da cifra, tom, BPM, compasso, temas, momentos, significado, referências
+ * e notas de arranjo. O vídeo escolhido fica na música para ouvir dentro do app.
  *
- * Letra e cifra não vêm daqui: têm direitos autorais e nenhum serviço as licencia para um app
- * como este. O app acha a página da cifra para a equipe abrir, copiar e colar.
+ * A cifra e a letra vêm junto com a ficha, extraídas no servidor da página citada (a busca só
+ * da cifra fica em cifra-search.ts).
  */
 
 export interface SongCandidate {
-  /** 'deezer:123' ou 'itunes:456' */
+  /** 'youtube:<id do vídeo>', 'deezer:123' ou 'itunes:456' */
   id: string
   title: string
   /** "Ao Vivo", "Playback"… */
@@ -131,6 +133,23 @@ export function candidateFromDeezer(t: DeezerTrack): SongCandidate {
   }
 }
 
+export const isYouTubeCandidate = (c: Pick<SongCandidate, 'id'>) => c.id.startsWith('youtube:')
+
+/** "(Ao Vivo)", "Playback"… no título do vídeo vira a versão. */
+function videoVersion(raw: string): string | null {
+  if (/\bplayback\b/i.test(raw)) return 'Playback'
+  if (/\bao vivo\b|\blive\b/i.test(raw)) return 'Ao Vivo'
+  if (/ac[uú]stic/i.test(raw)) return 'Acústico'
+  if (/\binstrumental\b/i.test(raw)) return 'Instrumental'
+  return null
+}
+
+/** Vídeo do YouTube ("Artista - Música (Ao Vivo)", do canal) → música, artista e versão. */
+export function candidateFromYouTube(c: SongCandidate): SongCandidate {
+  const { title, artist } = splitVideoTitle(c.title, c.artist)
+  return { ...c, title: title || c.title, artist: artist || cleanChannelName(c.artist), version: videoVersion(c.title) }
+}
+
 /** Tira repetições (a mesma faixa em coletâneas), mantendo a ordem de relevância. */
 export function dedupeCandidates(list: SongCandidate[]): SongCandidate[] {
   const seen = new Set<string>()
@@ -163,15 +182,29 @@ async function trackDirect(id: string): Promise<Pick<SongDetails, 'bpm' | 'year'
 
 const useServer = () => !isDemo
 
+/**
+ * Buscas já feitas nesta sessão. Cada busca no YouTube gasta cerca de 1% da cota diária gratuita
+ * da equipe, então apagar e redigitar o mesmo nome não busca de novo.
+ */
+const recentSearches = new Map<string, SongCandidate[]>()
+
 export async function searchSongs(q: string): Promise<SongCandidate[]> {
   const query = clean(q)
   if (query.length < 2) return []
+  const cacheKey = query.toLowerCase()
+  const cached = recentSearches.get(cacheKey)
+  if (cached) return cached
   let fromServer: SongCandidate[] | null = null
   let serverError: unknown = null
   if (useServer()) {
     try {
-      const r = await backend.invoke<{ results?: SongCandidate[]; error?: string }>('importar-musica', { action: 'buscar', q: query })
-      if (r.results?.length) return r.results
+      const r = await backend.invoke<{ results?: SongCandidate[]; error?: string }>(IMPORT_FUNCTION, { action: 'buscar', q: query })
+      if (r.results?.length) {
+        const list = r.results.map((c) => (isYouTubeCandidate(c) ? candidateFromYouTube(c) : c))
+        if (recentSearches.size >= 30) recentSearches.delete(recentSearches.keys().next().value!)
+        recentSearches.set(cacheKey, list)
+        return list
+      }
       fromServer = r.results ?? null
     } catch (e) {
       serverError = e
@@ -196,7 +229,7 @@ export function catalogFor(themes: Theme[]) {
 
 export async function completeSong(c: Pick<SongCandidate, 'id' | 'title' | 'artist' | 'album' | 'durationSec'>, themes: Theme[]): Promise<SongDetails> {
   if (useServer()) {
-    const r = await backend.invoke<Partial<SongDetails> & { error?: string }>('importar-musica', { action: 'completar', ...c, ...catalogFor(themes) })
+    const r = await backend.invoke<Partial<SongDetails> & { error?: string }>(IMPORT_FUNCTION, { action: 'completar', ...c, ...catalogFor(themes) })
     if (r.error) throw new Error(r.error)
     return normalizeDetails(r)
   }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { aiErrorMessage, candidateFromDeezer, catalogFor, dedupeCandidates, formatDuration, normalizeDetails } from './song-search'
+import { aiErrorMessage, candidateFromDeezer, candidateFromYouTube, catalogFor, dedupeCandidates, formatDuration, isYouTubeCandidate, normalizeDetails } from './song-search'
 import { THEMES } from './taxonomy'
 
 describe('busca pelo nome', () => {
@@ -47,5 +47,36 @@ describe('ficha vinda do servidor', () => {
     const c = catalogFor(THEMES)
     expect(c.themes.length).toBe(THEMES.length)
     expect(c.moments.some((m) => m.id === 'adoracao')).toBe(true)
+  })
+})
+
+describe('busca no YouTube', () => {
+  const video = (title: string, channel: string) => ({
+    id: 'youtube:abcdefghijk',
+    title,
+    version: null,
+    artist: channel,
+    album: null,
+    coverUrl: 'https://i.ytimg.com/vi/abcdefghijk/hqdefault.jpg',
+    durationSec: 360,
+    previewUrl: null,
+    link: 'https://www.youtube.com/watch?v=abcdefghijk',
+  })
+
+  it('separa música e artista do título do vídeo', () => {
+    expect(candidateFromYouTube(video('Fernandinho - Galileu (Ao Vivo)', 'Fernandinho'))).toMatchObject({ title: 'Galileu', artist: 'Fernandinho', version: 'Ao Vivo' })
+    expect(candidateFromYouTube(video('Lugar Secreto | Gabriela Rocha (Clipe Oficial)', 'Gabriela Rocha'))).toMatchObject({ title: 'Lugar Secreto', artist: 'Gabriela Rocha', version: null })
+  })
+
+  it('sem traço no título, o artista é o canal', () => {
+    expect(candidateFromYouTube(video('Ousado Amor', 'Isaías Saad - Topic'))).toMatchObject({ title: 'Ousado Amor', artist: 'Isaías Saad' })
+  })
+
+  it('reconhece playback e mantém o link do vídeo', () => {
+    const c = candidateFromYouTube(video('Galileu - Fernandinho (Playback)', 'Canal de Playbacks'))
+    expect(c.version).toBe('Playback')
+    expect(c.link).toBe('https://www.youtube.com/watch?v=abcdefghijk')
+    expect(isYouTubeCandidate(c)).toBe(true)
+    expect(isYouTubeCandidate({ id: 'deezer:1' })).toBe(false)
   })
 })

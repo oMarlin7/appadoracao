@@ -23,7 +23,7 @@ import {
   Video,
   X,
 } from 'lucide-react'
-import { TapTempo } from '@/components/media'
+import { MediaEmbed, TapTempo } from '@/components/media'
 import { SongCover } from '@/components/song-bits'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/primitives'
@@ -32,14 +32,14 @@ import { chordSearchUrl, parseMediaUrl, type MediaLink } from '@/lib/media'
 import { detectKeyFromText } from '@/lib/music/analyze'
 import { parseSheet } from '@/lib/music/sheet'
 import { prettyAccidentals } from '@/lib/music/theory'
-import { aiErrorMessage, completeSong, formatDuration, searchSongs, type SongCandidate, type SongDetails } from '@/lib/song-search'
+import { aiErrorMessage, completeSong, formatDuration, isYouTubeCandidate, searchSongs, type SongCandidate, type SongDetails } from '@/lib/song-search'
 import { MOMENT_BY_ID, TEMPOS, THEME_BY_ID, type Theme } from '@/lib/taxonomy'
 import { cn, plural } from '@/lib/utils'
 import type { Song } from '@/types'
 
 /**
- * Cadastro pelo nome: digitar "música e artista", escolher a faixa certa e o app completa a
- * ficha sozinho. Só a cifra fica com a equipe (copiar e colar), por causa dos direitos autorais.
+ * Cadastro pelo nome: digitar "música e artista", escolher o vídeo certo no YouTube e o app
+ * completa a ficha sozinho (o Deezer só aparece quando o YouTube não responde).
  */
 export function SmartImport({
   song,
@@ -125,7 +125,8 @@ export function SmartImport({
           if (my === token.current) setSearching(false)
         }
       },
-      link ? 0 : 450,
+      // Espera a pessoa parar de digitar: cada busca no YouTube gasta da cota diária.
+      link ? 0 : 700,
     )
     return () => clearTimeout(timer)
   }, [query, picked])
@@ -256,6 +257,21 @@ function Thumb({ url, size = 52 }: { url: string | null; size?: number }) {
   )
 }
 
+/** Miniatura do vídeo (16:9), com o selo do YouTube. */
+function VideoThumb({ id }: { id: string }) {
+  const [failed, setFailed] = useState(false)
+  return (
+    <span className="relative block h-[45px] w-20 shrink-0 overflow-hidden rounded-xl bg-surface-2 shadow-card">
+      {!failed && <img src={`https://i.ytimg.com/vi/${id}/mqdefault.jpg`} alt="" loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} className="size-full object-cover" />}
+      <span className="absolute right-1 bottom-1 grid size-4 place-items-center rounded-[5px] bg-[#ff0033] text-white">
+        <Play className="ml-px size-2.5 fill-current" />
+      </span>
+    </span>
+  )
+}
+
+const videoId = (c: SongCandidate) => c.id.slice('youtube:'.length)
+
 function SearchResults({ results, error, query, onChoose }: { results: SongCandidate[] | null; error: string | null; query: string; onChoose: (c: SongCandidate) => void }) {
   if (error) return <p className="px-5 py-4 text-[13.5px] font-semibold text-rose-ink">{error}</p>
   if (!results) return null
@@ -272,7 +288,7 @@ function SearchResults({ results, error, query, onChoose }: { results: SongCandi
         {results.map((c, i) => (
           <motion.li key={c.id} initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: Math.min(i, 6) * 0.03 }}>
             <button type="button" onClick={() => onChoose(c)} className="flex w-full items-center gap-3 px-5 py-2.5 text-left transition-colors hover:bg-surface-2 active:bg-surface-2">
-              <Thumb url={c.coverUrl} />
+              {isYouTubeCandidate(c) ? <VideoThumb id={videoId(c)} /> : <Thumb url={c.coverUrl} />}
               <span className="min-w-0 flex-1">
                 <span className="flex items-center gap-1.5">
                   <span className="truncate text-[15px] font-bold text-ink">{c.title}</span>
@@ -287,7 +303,9 @@ function SearchResults({ results, error, query, onChoose }: { results: SongCandi
           </motion.li>
         ))}
       </ul>
-      {results.some((r) => r.id.startsWith('deezer:')) && <p className="px-5 pt-1 pb-2 text-right text-[11px] font-semibold text-muted">Catálogo: Deezer</p>}
+      <p className="px-5 pt-1 pb-2 text-right text-[11px] font-semibold text-muted">
+        {results.some(isYouTubeCandidate) ? 'Resultados do YouTube' : results.some((r) => r.id.startsWith('deezer:')) ? 'Catálogo: Deezer' : null}
+      </p>
     </div>
   )
 }
@@ -299,8 +317,12 @@ function SearchResults({ results, error, query, onChoose }: { results: SongCandi
 function PickedSong({ candidate, song, onReset }: { candidate: SongCandidate; song: Song; onReset: () => void }) {
   const audio = useRef<HTMLAudioElement | null>(null)
   const [playing, setPlaying] = useState(false)
+  const [video, setVideo] = useState(false)
+  const youtube = isYouTubeCandidate(candidate) ? parseMediaUrl(candidate.link) : null
   useEffect(() => () => audio.current?.pause(), [])
   const toggle = () => {
+    // Vídeo do YouTube: abre o player aqui mesmo, no app.
+    if (youtube) return setVideo((v) => !v)
     if (!candidate.previewUrl) return
     audio.current ??= new Audio(candidate.previewUrl)
     const a = audio.current
@@ -318,14 +340,17 @@ function PickedSong({ candidate, song, onReset }: { candidate: SongCandidate; so
       <div className="relative flex items-center gap-4">
         <div className="relative shrink-0">
           <SongCover song={{ ...song, coverUrl: song.coverUrl ?? candidate.coverUrl }} size={88} />
-          {candidate.previewUrl && (
+          {(youtube || candidate.previewUrl) && (
             <button
               type="button"
               onClick={toggle}
-              aria-label={playing ? 'Pausar prévia' : 'Ouvir prévia'}
-              className="absolute -right-2 -bottom-2 grid size-10 place-items-center rounded-full bg-primary text-primary-ink shadow-float transition-transform active:scale-90"
+              aria-label={youtube ? (video ? 'Fechar o vídeo' : 'Ouvir no YouTube aqui no app') : playing ? 'Pausar prévia' : 'Ouvir prévia'}
+              className={cn(
+                'absolute -right-2 -bottom-2 grid size-10 place-items-center rounded-full shadow-float transition-transform active:scale-90',
+                youtube ? 'bg-[#ff0033] text-white' : 'bg-primary text-primary-ink',
+              )}
             >
-              {playing ? <Pause className="size-4" fill="currentColor" /> : <Play className="ml-0.5 size-4" fill="currentColor" />}
+              {playing || video ? <Pause className="size-4" fill="currentColor" /> : <Play className="ml-0.5 size-4" fill="currentColor" />}
             </button>
           )}
         </div>
@@ -333,13 +358,14 @@ function PickedSong({ candidate, song, onReset }: { candidate: SongCandidate; so
           <div className="truncate text-[19px] leading-tight font-extrabold tracking-tight text-ink">{song.title || candidate.title}</div>
           <div className="mt-0.5 truncate text-[14px] font-semibold text-ink-2">{song.artist || candidate.artist}</div>
           <div className="mt-0.5 truncate text-[12.5px] text-muted">
-            {[candidate.version, candidate.album, formatDuration(candidate.durationSec)].filter(Boolean).join(' · ')}
+            {[youtube ? 'YouTube' : null, candidate.version, candidate.album, formatDuration(candidate.durationSec)].filter(Boolean).join(' · ')}
           </div>
         </div>
         <button type="button" onClick={onReset} aria-label="Escolher outra música" className="grid size-9 shrink-0 place-items-center self-start rounded-full bg-surface/70 text-ink-2 hover:bg-surface">
           <X className="size-4" />
         </button>
       </div>
+      {youtube && video && <MediaEmbed link={youtube} title={song.title || candidate.title} autoLoad className="relative mt-4 rounded-2xl" />}
     </div>
   )
 }

@@ -12,6 +12,9 @@ export const backend: Backend = url && anonKey ? createSupabaseBackend(url, anon
 
 export const isDemo = backend.mode === 'demo'
 
+/** Função do servidor que busca músicas e monta a ficha (na prévia de teste, uma cópia dela). */
+export const IMPORT_FUNCTION = import.meta.env.VITE_IMPORT_FUNCTION || 'importar-musica'
+
 export function demoBackend(): DemoBackend | null {
   return isDemo ? (backend as DemoBackend) : null
 }

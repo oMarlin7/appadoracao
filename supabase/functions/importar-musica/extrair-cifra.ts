@@ -100,15 +100,24 @@ function looksLikeSheet(text: string): boolean {
   return hasChordLine(t) || /^tom\s*:/im.test(t) || /\[(intro|refrao|verso|coro|ponte|parte)\]/i.test(t)
 }
 
+/**
+ * Limpa quebras e espaços do fim das linhas. Os espaços do meio (e do começo) ficam: é a
+ * coluna de cada acorde que diz em cima de qual sílaba ele cai.
+ */
 function normalizeText(text: string): string {
   return text
     .replace(/\r\n?/g, '\n')
+    .replace(/\t/g, '    ')
+    .replace(/[\u200b\ufeff]/g, '')
     .split('\n')
-    .map((l) => l.replace(/[ \t]+$/g, '').replace(/[ \t]{2,}/g, ' '))
+    .map((l) => l.replace(/[ \t\u00a0]+$/g, '').replace(/\u00a0/g, ' '))
     .join('\n')
     .replace(/\n{3,}/g, '\n\n')
-    .trim()
+    .replace(/^\n+|\n+$/g, '')
 }
+
+/** Para texto que veio sem colunas (letra corrida): junta espaços repetidos. */
+const collapseSpaces = (text: string) => text.split('\n').map((l) => l.replace(/[ \t]{2,}/g, ' ').trim()).join('\n')
 
 function keyFromText(content: string): string | null {
   const m = /^tom\s*:?\s*([A-G][#b]?m?)\b/im.exec(content)
@@ -136,12 +145,23 @@ function finalize(content: string, source: ExtractedSheet['source']): ExtractedS
 // 1) Bloco <pre> — Cifra Club (imprimir.html) e similares
 // ---------------------------------------------------------------------------
 
+/** Conteúdo de um <pre> → texto com as colunas dos acordes intactas. */
+function preHtmlText(inner: string): string {
+  return normalizeText(decodeEntities(inner.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')))
+}
+
+/** HTML que o Jina devolve com X-Return-Format: html e X-Target-Selector: pre. */
+export function jinaHtmlToSheet(html: string): string | null {
+  const text = preText(stripNonContent(html))
+  return text && looksLikeSheet(text) ? text : null
+}
+
 function preText(html: string): string | null {
   const re = /<pre\b[^>]*>([\s\S]*?)<\/pre>/gi
   let m: RegExpExecArray | null
   let best: string | null = null
   while ((m = re.exec(html))) {
-    const text = normalizeText(m[1].replace(/<[^>]+>/g, '\n'))
+    const text = preHtmlText(m[1])
     if (looksLikeSheet(text) && (!best || text.length > best.length)) best = text
   }
   return best
@@ -208,9 +228,13 @@ function containerHtml(html: string): string | null {
 
 function bodyText(html: string): string {
   return normalizeText(
-    html
-      .replace(/<(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr)\s*\/?>/gi, '\n')
-      .replace(/<[^>]+>/g, ' '),
+    collapseSpaces(
+      decodeEntities(
+        html
+          .replace(/<(?:br|\/p|\/div|\/li|\/h[1-6]|\/tr)\s*\/?>/gi, '\n')
+          .replace(/<[^>]+>/g, ' '),
+      ),
+    ),
   )
 }
 
@@ -329,13 +353,17 @@ export function jinaMarkdownToSheet(md: string): string {
     if (lyric) out.push(lyric)
     for (const l of trail) out.push(l)
   }
-  return normalizeText(out.join('\n'))
+  return normalizeText(collapseSpaces(out.join('\n')))
 }
 
-async function fetchJina(url: string, ms = 25_000): Promise<string | null> {
+/**
+ * Lê a página por um navegador real (Jina). `html` mantém os espaços e as quebras de linha do
+ * <pre>, ou seja, a posição de cada acorde; o `markdown` junta a linha dos acordes com a da letra.
+ */
+async function fetchJina(url: string, format: 'html' | 'markdown' = 'html', ms = 25_000): Promise<string | null> {
   try {
     const res = await fetch(`https://r.jina.ai/${url}`, {
-      headers: { 'User-Agent': UA, Accept: 'text/plain', 'X-Return-Format': 'markdown', 'X-Target-Selector': 'pre' },
+      headers: { 'User-Agent': UA, Accept: 'text/plain', 'X-Return-Format': format, 'X-Target-Selector': 'pre' },
       signal: AbortSignal.timeout(ms),
     })
     if (!res.ok) {
@@ -374,6 +402,18 @@ async function findCifraUrlViaSearch(title: string, artist: string): Promise<str
 }
 
 /**
+ * Cifra de uma página: o HTML do <pre>, com cada acorde na coluna certa. Se o Jina não
+ * responder em HTML, tenta o markdown (os acordes ficam na linha certa, mas sem a coluna).
+ */
+async function readSheet(url: string): Promise<string | null> {
+  const html = await fetchJina(url, 'html')
+  if (html) return jinaHtmlToSheet(html)
+  const md = await fetchJina(url, 'markdown')
+  const content = md ? jinaMarkdownToSheet(md) : null
+  return content && looksLikeSheet(content) ? content : null
+}
+
+/**
  * Tenta extrair cifra+letra de uma música.
  * Ordem: Jina (navegador real) → busca do Jina → LRCLIB (letra).
  */
@@ -400,10 +440,8 @@ export async function fetchSheet(
   // 1) Jina sobre cada candidato (navegador real; contorna o Cloudflare).
   for (const url of unique) {
     if (Date.now() > deadline) break
-    const md = await fetchJina(url)
-    if (!md) continue
-    const content = jinaMarkdownToSheet(md)
-    if (content && looksLikeSheet(content)) {
+    const content = await readSheet(url)
+    if (content) {
       console.log(`[cifra] fonte: jina — ${url}`)
       return { content, originalKey: keyFromText(content), bpm: bpmFromText(content), source: sourceOf(url), sourceUrl: url }
     }
@@ -413,13 +451,10 @@ export async function fetchSheet(
   if (Date.now() <= deadline && a) {
     const found = await findCifraUrlViaSearch(t, a)
     if (found && !unique.includes(found)) {
-      const md = await fetchJina(found)
-      if (md) {
-        const content = jinaMarkdownToSheet(md)
-        if (content && looksLikeSheet(content)) {
-          console.log(`[cifra] fonte: jina (via busca) — ${found}`)
-          return { content, originalKey: keyFromText(content), bpm: bpmFromText(content), source: 'cifraclub', sourceUrl: found }
-        }
+      const content = await readSheet(found)
+      if (content) {
+        console.log(`[cifra] fonte: jina (via busca) — ${found}`)
+        return { content, originalKey: keyFromText(content), bpm: bpmFromText(content), source: 'cifraclub', sourceUrl: found }
       }
     }
   }
