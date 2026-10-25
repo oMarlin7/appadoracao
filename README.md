@@ -122,7 +122,7 @@ A função `importar-musica` faz a busca pelo nome, traz os dados dos links, imp
 1. Crie a conta em [platform.deepseek.com](https://platform.deepseek.com), coloque crédito em *Top up* (o uso é descontado do saldo) e crie a chave em *API Keys*.
 2. No painel do Supabase: **Edge Functions → Secrets → Add new secret**, nome `DEEPSEEK_API_KEY`, valor = a chave.
 
-**Custo**: só com a chave, e só quando alguém cadastra uma música pelo nome — cerca de US$ 0,01 por música (4 ou 5 buscas na web a US$ 0,75 por mil, mais o modelo `deepseek-flash`, que custa metade fora do horário de pico; no Brasil o pico cai de madrugada). Sem saldo, o app avisa e continua com a ficha gratuita. Os dados enviados (nome, artista e letra da música) são processados pela DeepSeek, em servidores na China.
+**Custo**: só com a chave, e só quando alguém cadastra uma música pelo nome — cerca de US$ 0,01 por música (4 ou 5 buscas na web a US$ 0,75 por mil, mais o modelo `deepseek-flash` com o modo de raciocínio desligado, o jeito mais barato de usar a DeepSeek; ele custa metade fora do horário de pico; no Brasil o pico cai de madrugada). Sem saldo, o app avisa e continua com a ficha gratuita. Os dados enviados (nome, artista e letra da música) são processados pela DeepSeek, em servidores na China.
 
 Para publicar a função num projeto novo, com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
 

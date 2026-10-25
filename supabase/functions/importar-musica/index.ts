@@ -337,7 +337,7 @@ interface ChatResponse {
   choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }>
 }
 
-/** Uma resposta em JSON do modelo, pensando pouco (rápido e barato). */
+/** Uma resposta em JSON do modelo, sem o modo de raciocínio (ligado por padrão e cobrado como saída). */
 async function askJson<T>(system: string, user: string, key: string, ms: number): Promise<T> {
   const r = await deepseek<ChatResponse>(
     '/chat/completions',
@@ -348,8 +348,8 @@ async function askJson<T>(system: string, user: string, key: string, ms: number)
         { role: 'user', content: user },
       ],
       response_format: { type: 'json_object' },
-      reasoning_effort: 'low',
-      max_tokens: 8000,
+      thinking: { type: 'disabled' },
+      max_tokens: 4000,
     },
     key,
     ms,
