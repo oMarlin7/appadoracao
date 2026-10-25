@@ -7,18 +7,18 @@
 //                                     não responde
 //   { action: 'completar', … }     → ficha da música escolhida: o nome como está no Cifra Club, a cifra+letra
 //                                     da página achada pela busca do site (extrair-cifra.ts) e, com a chave
-//                                     da IA, vídeo oficial, Spotify, tom, BPM, compasso, ritmo, temas,
-//                                     momentos, significado, referências bíblicas e notas de arranjo
-//                                     (Claude com busca na web)
+//                                     da IA, Spotify, tom, BPM, compasso, ritmo, temas, momentos,
+//                                     significado, referências bíblicas e notas de arranjo (DeepSeek: busca
+//                                     na web + modelo; dado da gravação só entra com a fonte)
 //   { action: 'cifra', … }         → só a cifra+letra de uma música (título, artista e, se houver, o link)
 //   { action: 'status' }           → o que está ligado no servidor (chave da IA, chave do YouTube); a
 //                                     única ação que não pede login
 //   { action: 'metadata', url }    → título, artista, capa e duração de um link do YouTube/Spotify
-//   { action: 'analisar', … }      → ficha a partir da letra que o membro colou
+//   { action: 'analisar', … }      → temas, momentos, significado e referências a partir da letra
 //
 // Publicar:  supabase functions deploy importar-musica --no-verify-jwt
-// Chave IA:  supabase secrets set ANTHROPIC_API_KEY=sk-ant-...   (sem ela, a busca e os links
-//            funcionam; a ficha completa precisa da chave)
+// Chave IA:  supabase secrets set DEEPSEEK_API_KEY=sk-...   (opcional: sem ela, a busca, a cifra e os
+//            links funcionam, e o app tira temas e momentos da letra)
 // YouTube:   supabase secrets set YOUTUBE_API_KEY=...   (YouTube Data API v3; sem ela, a busca usa o Deezer)
 //
 // O app usa a chave publicável (sb_publishable_…), que o verify_jwt da plataforma não
@@ -28,10 +28,8 @@
 // chegam ao app com a fonte para atribuição. A responsabilidade de ter licença para reproduzir
 // o conteúdo (ex.: CCLI) é do ministério — a mesma que vale para o texto colado à mão.
 
-import Anthropic from 'npm:@anthropic-ai/sdk@0.135.0'
-import { fetchSheet, findCifraPages, sheetFromPage, type CifraPage } from './extrair-cifra.ts'
-
-const MODEL = 'claude-opus-5-5'
+import { isBibleRef } from './biblia.ts'
+import { fetchSheet, findCifraPages, lyricsOnly, type CifraPage } from './extrair-cifra.ts'
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -297,7 +295,122 @@ async function deezerTrack(id: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Ficha completa (Claude + busca na web)
+// IA (DeepSeek): busca na web e modelo de texto
+// ---------------------------------------------------------------------------
+
+const DEEPSEEK_URL = 'https://api.deepseek.com'
+const MODEL = 'deepseek-flash'
+
+/** Erro da IA, com o código que o app entende ('chave-invalida', 'sem-saldo', 'limite', 'tempo'…). */
+class AIError extends Error {
+  constructor(readonly code: string) {
+    super(code)
+  }
+}
+
+const timedOut = (e: unknown) => e instanceof Error && e.name === 'TimeoutError'
+
+async function deepseek<T>(path: string, body: unknown, key: string, ms: number): Promise<T> {
+  let res: Response
+  try {
+    res = await fetch(`${DEEPSEEK_URL}${path}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(ms),
+    })
+  } catch (e) {
+    throw new AIError(timedOut(e) ? 'tempo' : 'falhou')
+  }
+  if (res.status === 401) throw new AIError('chave-invalida')
+  if (res.status === 402) throw new AIError('sem-saldo')
+  if (res.status === 429) throw new AIError('limite')
+  if (!res.ok) throw new AIError(`api-${res.status}`)
+  try {
+    return JSON.parse(await res.text()) as T
+  } catch (e) {
+    throw new AIError(timedOut(e) ? 'tempo' : 'falhou')
+  }
+}
+
+interface ChatResponse {
+  choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }>
+}
+
+/** Uma resposta em JSON do modelo, pensando pouco (rápido e barato). */
+async function askJson<T>(system: string, user: string, key: string, ms: number): Promise<T> {
+  const r = await deepseek<ChatResponse>(
+    '/chat/completions',
+    {
+      model: MODEL,
+      messages: [
+        { role: 'system', content: system },
+        { role: 'user', content: user },
+      ],
+      response_format: { type: 'json_object' },
+      reasoning_effort: 'low',
+      max_tokens: 8000,
+    },
+    key,
+    ms,
+  )
+  const choice = r.choices?.[0]
+  if (choice?.finish_reason === 'content_filter') throw new AIError('recusado')
+  const text = choice?.message?.content?.trim()
+  if (choice?.finish_reason !== 'stop' || !text) throw new AIError('sem-resposta')
+  try {
+    return JSON.parse(text) as T
+  } catch {
+    throw new AIError('sem-resposta')
+  }
+}
+
+interface WebResult {
+  url: string
+  title: string
+  /** O resumo da página que a busca devolve para o modelo ler. */
+  text: string
+}
+
+async function webSearch(query: string, key: string, count: number): Promise<WebResult[]> {
+  try {
+    const r = await deepseek<{ results?: Array<{ url?: string; title?: string; summary?: string; snippet?: string }> }>(
+      '/v1/tools/search',
+      { query: query.slice(0, 128), count },
+      key,
+      15_000,
+    )
+    return (r.results ?? [])
+      .filter((x) => !!x.url && /^https?:\/\//.test(x.url))
+      .map((x) => ({ url: x.url!, title: clean(x.title), text: clean(x.summary || x.snippet).slice(0, 900) }))
+  } catch (e) {
+    console.warn(`[ficha] busca falhou — ${query} — ${e instanceof Error ? e.message : String(e)}`)
+    return []
+  }
+}
+
+/** As buscas da ficha, ao mesmo tempo, sem repetir páginas. */
+async function searchSong(song: { title: string; artist: string }, wantVideo: boolean, key: string): Promise<WebResult[]> {
+  const q = `${song.title} ${song.artist}`.trim()
+  const lists = await Promise.all([
+    webSearch(`${q} site:open.spotify.com`, key, 4),
+    webSearch(`${q} bpm tom compasso`, key, 6),
+    webSearch(`"${song.title}" ${song.artist} história significado da música lang:pt`, key, 6),
+    webSearch(`"${song.title}" ${song.artist} como tocar arranjo lang:pt`, key, 5),
+    wantVideo ? webSearch(`${q} site:youtube.com`, key, 4) : Promise.resolve<WebResult[]>([]),
+  ])
+  const seen = new Set<string>()
+  const out: WebResult[] = []
+  for (const r of lists.flat()) {
+    if (seen.has(r.url)) continue
+    seen.add(r.url)
+    out.push(r)
+  }
+  return out.slice(0, 24)
+}
+
+// ---------------------------------------------------------------------------
+// Ficha completa (busca na web + modelo)
 // ---------------------------------------------------------------------------
 
 interface CatalogItem {
@@ -318,79 +431,83 @@ interface CompleteInput {
   moments?: CatalogItem[]
 }
 
-interface Ficha {
-  youtubeUrl: string | null
-  spotifyUrl: string | null
-  cifraUrl: string | null
-  originalKey: string | null
-  bpm: number | null
-  timeSignature: string | null
-  tempo: 'lenta' | 'moderada' | 'rapida' | null
-  themes: string[]
-  moments: string[]
-  meaning: string
-  bibleRefs: string[]
-  arrangementNotes: string
+/** Um dado da gravação e o número do resultado da busca de onde ele veio. */
+interface Cited<T> {
+  value?: T | null
+  source?: number | null
+}
+
+/** O que o modelo devolve (tudo é conferido antes de entrar na ficha). */
+interface FichaIA {
+  youtube?: number | null
+  spotify?: number | null
+  originalKey?: Cited<string> | null
+  bpm?: Cited<number> | null
+  timeSignature?: Cited<string> | null
+  tempo?: string | null
+  themes?: unknown
+  moments?: unknown
+  meaning?: unknown
+  bibleRefs?: unknown
+  arrangement?: { notes?: unknown; source?: number | null } | null
 }
 
 const TIME_SIGNATURES = ['4/4', '3/4', '6/8', '2/4', '12/8']
+const TEMPOS = ['lenta', 'moderada', 'rapida']
 
 const SYSTEM_FICHA = `Você ajuda o ministério de louvor de uma igreja evangélica brasileira a cadastrar músicas no repertório da equipe.
-Recebe uma música escolhida num catálogo (título, artista, álbum, duração) e monta a ficha dela pesquisando na web.
-
-O que pesquisar (de 3 a 5 buscas bem escolhidas costumam bastar):
-- O vídeo oficial no YouTube: clipe, ao vivo ou lyric video publicado pelo artista, ministério ou gravadora. Evite covers e versões de terceiros.
-- A faixa no Spotify (open.spotify.com/track/…).
-- O endereço da página da cifra no Cifra Club (ou em outro site de cifras).
-- O tom original, o BPM e o compasso da gravação original. Sites de cifra costumam mostrar o tom; sites de BPM mostram o andamento.
-- O que se sabe da música: contexto, mensagem, o que o artista contou sobre ela.
-
-Quando terminar, chame salvar_ficha uma única vez com tudo.
+Recebe a música (nome e artista), a letra (quando houver), resultados de uma busca na web numerados [1], [2]… e os temas e momentos do culto disponíveis. Responda só com um objeto JSON, no formato do exemplo.
 
 Regras:
-- Links: só endereços que apareceram nos resultados da busca. Não monte links de cabeça.
-- Na dúvida sobre um dado (link, tom, BPM, compasso), use null. Não invente.
-- Tom em notação americana (C, G, Bb, F#m, Em…). BPM em número inteiro.
-- Temas: os 2 a 4 mais centrais. Momentos do culto: 1 a 3 em que a música funciona bem.
-- Significado: 2 ou 3 frases em português do Brasil, com suas palavras, sobre a mensagem e quando ela edifica no culto.
-- Referências bíblicas: até 4, as que mais dialogam com a mensagem (formato "Salmos 23:1-3").
-- Notas de arranjo: o que a equipe precisa para tocar como na gravação original, em frases curtas, uma por linha (como começa, quem entra quando, dinâmica, partes que repetem, como termina). Se não encontrar informação sobre a gravação, proponha um arranjo simples no estilo da música e comece com "Sugestão:".
-- Nunca escreva, complete ou reproduza a letra ou a cifra da música, nem trechos delas.`
+- Dados da gravação (vídeo, Spotify, tom, BPM, compasso e arranjo): use somente o que está escrito nos resultados da busca e diga em "source" o número do resultado de onde veio. Se nenhum resultado traz o dado, use null. Nunca deduza, estime ou invente.
+- youtube / spotify: o número do resultado que é o vídeo oficial / a faixa no Spotify desta música e deste artista; senão null.
+- arrangement: só quando um resultado descreve com clareza como a gravação é tocada (introdução, instrumentos, partes que repetem, dinâmica, final). Frases curtas, uma por item. Não tire da letra nem da cifra e não sugira nada: sem essa descrição, arrangement é null.
+- themes: de 2 a 4 ids, só da lista. moments: de 1 a 3 ids, só da lista.
+- meaning: 2 ou 3 frases em português do Brasil, com suas palavras, sobre a mensagem e quando ela edifica no culto (pela letra e pelo que os resultados contam da música).
+- bibleRefs: até 4 referências que dialogam com a mensagem, no formato "Salmos 23:1-3". Só referências que você tem certeza que existem.
+- tempo: "lenta", "moderada" ou "rapida", pelo caráter da música.
+- Nunca copie a letra nem trechos dela.
 
-const nullable = (schema: Record<string, unknown>, description: string) => ({ anyOf: [schema, { type: 'null' }], description })
-
-function fichaSchema(themeIds: string[], momentIds: string[]) {
-  const pick = (ids: string[]) => (ids.length ? { type: 'string', enum: ids } : { type: 'string' })
-  return {
-    type: 'object' as const,
-    properties: {
-      youtubeUrl: nullable({ type: 'string' }, 'Vídeo oficial no YouTube, copiado de um resultado da busca'),
-      spotifyUrl: nullable({ type: 'string' }, 'Faixa no Spotify (open.spotify.com/track/…), copiada de um resultado da busca'),
-      cifraUrl: nullable({ type: 'string' }, 'Endereço da página da cifra (ex.: Cifra Club), copiado de um resultado da busca'),
-      originalKey: nullable({ type: 'string' }, 'Tom da gravação original, ex.: G, Bb, F#m'),
-      bpm: nullable({ type: 'integer' }, 'Andamento da gravação original'),
-      timeSignature: nullable({ type: 'string', enum: TIME_SIGNATURES }, 'Compasso'),
-      tempo: nullable({ type: 'string', enum: ['lenta', 'moderada', 'rapida'] }, 'Caráter da música'),
-      themes: { type: 'array', items: pick(themeIds), description: 'Ids dos 2 a 4 temas mais centrais' },
-      moments: { type: 'array', items: pick(momentIds), description: 'Ids de 1 a 3 momentos do culto' },
-      meaning: { type: 'string', description: '2 ou 3 frases sobre a mensagem, com suas palavras' },
-      bibleRefs: { type: 'array', items: { type: 'string' }, description: 'Até 4 referências, ex.: Salmos 23:1-3' },
-      arrangementNotes: { type: 'string', description: 'Notas de arranjo, uma por linha' },
-    },
-    required: ['youtubeUrl', 'spotifyUrl', 'cifraUrl', 'originalKey', 'bpm', 'timeSignature', 'tempo', 'themes', 'moments', 'meaning', 'bibleRefs', 'arrangementNotes'],
-    additionalProperties: false,
-  }
-}
+Exemplo de JSON:
+{"youtube": null, "spotify": 2, "originalKey": {"value": "G", "source": 4}, "bpm": {"value": 72, "source": 4}, "timeSignature": {"value": null, "source": null}, "tempo": "lenta", "themes": ["adoracao", "nome-jesus"], "moments": ["adoracao"], "meaning": "…", "bibleRefs": ["Filipenses 2:9-11"], "arrangement": null}`
 
 const mmss = (sec: number | null | undefined) => (sec ? `${Math.floor(sec / 60)}:${String(sec % 60).padStart(2, '0')}` : null)
 
 const catalogText = (title: string, items: CatalogItem[]) =>
   [title, ...items.map((t) => `- ${t.id}: ${t.name}${t.description ? ` — ${t.description}` : ''}`)].join('\n')
 
-type Research = { ficha: Ficha; sources: Array<{ url: string; title: string }> } | { error: string }
+function fichaPrompt(input: CompleteInput, song: { title: string; artist: string }, video: string | null, lyrics: string, results: WebResult[]): string {
+  return [
+    `Música: ${song.title}`,
+    `Artista: ${song.artist || '(não informado)'}`,
+    input.album ? `Álbum: ${clean(input.album)}` : null,
+    mmss(input.durationSec) ? `Duração: ${mmss(input.durationSec)}` : null,
+    video ? `Vídeo escolhido pela equipe (não precisa achar outro): ${video}` : null,
+    '',
+    lyrics ? `Letra:\n<letra>\n${lyrics.slice(0, 5000)}\n</letra>` : '(Sem a letra.)',
+    '',
+    'Resultados da busca:',
+    results.length ? results.map((r, i) => `[${i + 1}] ${r.title} — ${r.url}\n${r.text}`).join('\n\n') : '(nenhum)',
+    '',
+    catalogText('Temas disponíveis (id: nome — descrição):', input.themes ?? []),
+    '',
+    catalogText('Momentos do culto (id: nome — descrição):', input.moments ?? []),
+  ]
+    .filter((l) => l !== null)
+    .join('\n')
+}
 
-/** A função do Supabase é encerrada aos 150 s: a pesquisa inteira cabe em menos que isso. */
-const RESEARCH_BUDGET_MS = 115_000
+/** A fonte citada fala mesmo de como a música é tocada? */
+const describesArrangement = (r: WebResult) =>
+  /introdu|\bintro\b|teclado|piano|viol[aã]o|guitarra|bateria|baixo|refr[aã]o|ponte|solo|arranjo|dedilhad|batida|levada|crescend|instrument/i.test(`${r.title} ${r.text}`)
+
+const ids = (v: unknown, allowed: Set<string>, max: number) =>
+  Array.isArray(v) ? [...new Set(v.filter((x): x is string => typeof x === 'string' && allowed.has(x)))].slice(0, max) : []
+
+const texts = (v: unknown) => (Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string').map(clean).filter(Boolean) : [])
+
+/** A função do Supabase é encerrada aos 150 s: a ficha inteira (busca, cifra e IA) cabe nisso. */
+const COMPLETE_BUDGET_MS = 140_000
 
 /** Vídeo do YouTube que a equipe escolheu na busca (o app abre o player dele). */
 const chosenVideo = (input: CompleteInput) => {
@@ -398,146 +515,95 @@ const chosenVideo = (input: CompleteInput) => {
   return id ? `https://www.youtube.com/watch?v=${id}` : null
 }
 
-async function research(input: CompleteInput, apiKey: string, cifraUrl: string | null): Promise<Research> {
-  const client = new Anthropic({ apiKey })
-  const deadline = Date.now() + RESEARCH_BUDGET_MS
-  const themes = input.themes ?? []
-  const moments = input.moments ?? []
-  const video = chosenVideo(input)
-  const song = [
-    `Música: ${clean(input.title)}`,
-    `Artista: ${clean(input.artist) || '(não informado)'}`,
-    input.album ? `Álbum: ${clean(input.album)}` : null,
-    mmss(input.durationSec) ? `Duração: ${mmss(input.durationSec)}` : null,
-    video ? `Vídeo do YouTube escolhido pela equipe (use este em youtubeUrl; não procure outro): ${video}` : null,
-    cifraUrl ? `Página da cifra, já encontrada (use esta em cifraUrl; não procure outra): ${cifraUrl}` : null,
-  ]
-    .filter(Boolean)
-    .join('\n')
-  const prompt = [song, '', catalogText('Temas disponíveis (id: nome — descrição):', themes), '', catalogText('Momentos do culto (id: nome — descrição):', moments)].join('\n')
-
-  const tools: Anthropic.Beta.BetaToolUnion[] = [
-    { type: 'web_search_20260209', name: 'web_search', max_uses: 6, user_location: { type: 'approximate', country: 'BR', timezone: 'America/Sao_Paulo' } },
-    {
-      name: 'salvar_ficha',
-      description: 'Salva a ficha da música no repertório da equipe. Chame uma única vez, no final.',
-      strict: true,
-      input_schema: fichaSchema(
-        themes.map((t) => t.id),
-        moments.map((m) => m.id),
-      ),
-    },
-  ]
-  const messages: Anthropic.Beta.BetaMessageParam[] = [{ role: 'user', content: prompt }]
-  const sources = new Map<string, string>()
-
-  for (let turn = 0; turn < 5; turn++) {
-    const left = deadline - Date.now()
-    if (left < 10_000) return { error: 'tempo' }
-    const res = await client.beta.messages.create(
-      {
-        model: MODEL,
-        max_tokens: 16000,
-        betas: ['server-side-fallback-2026-07-01'],
-        fallbacks: 'default',
-        output_config: { effort: 'medium' },
-        // Cada busca relê a conversa inteira; com o cache, o que já foi lido sai bem mais barato.
-        cache_control: { type: 'ephemeral' },
-        system: SYSTEM_FICHA,
-        tools,
-        messages,
-      },
-      // Só tenta de novo (ex.: servidor ocupado) se ainda houver tempo para uma pesquisa inteira.
-      { timeout: left, maxRetries: left > 70_000 ? 1 : 0 },
-    )
-    for (const block of res.content)
-      if (block.type === 'web_search_tool_result' && Array.isArray(block.content))
-        for (const r of block.content) if (r.type === 'web_search_result' && !sources.has(r.url)) sources.set(r.url, r.title)
-
-    if (res.stop_reason === 'refusal') return { error: 'recusado' }
-    const call = res.content.find((b) => b.type === 'tool_use' && b.name === 'salvar_ficha')
-    if (call && call.type === 'tool_use') return { ficha: call.input as Ficha, sources: [...sources].map(([url, title]) => ({ url, title })) }
-
-    messages.push({ role: 'assistant', content: res.content })
-    // pause_turn: a busca no servidor ainda não terminou; reenviar continua de onde parou.
-    if (res.stop_reason !== 'pause_turn') messages.push({ role: 'user', content: 'Agora chame salvar_ficha com o que você encontrou (use null no que não encontrou).' })
-  }
-  return { error: 'sem-resposta' }
-}
-
-function aiError(e: unknown): string {
-  if (e instanceof Anthropic.AuthenticationError) return 'chave-invalida'
-  if (e instanceof Anthropic.RateLimitError) return 'limite'
-  if (e instanceof Anthropic.APIConnectionTimeoutError) return 'tempo'
-  if (e instanceof Anthropic.APIError) return `api-${e.status ?? 'erro'}`
-  return 'falhou'
-}
-
-/** A função do Supabase é encerrada aos 150 s: a ficha inteira (busca, IA e cifra) cabe nisso. */
-const COMPLETE_BUDGET_MS = 140_000
-
 async function complete(input: CompleteInput) {
   const title = clean(input.title)
   if (!title) return { error: 'sem título' }
   const deadline = Date.now() + COMPLETE_BUDGET_MS
   const deezerId = /^deezer:(\d+)$/.exec(input.catalogId ?? input.id ?? '')?.[1]
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
+  const key = Deno.env.get('DEEPSEEK_API_KEY')
   const themeIds = new Set((input.themes ?? []).map((t) => t.id))
   const momentIds = new Set((input.moments ?? []).map((m) => m.id))
+  const video = chosenVideo(input)
 
   // O nome certo vem da busca do Cifra Club: corrige "Música - Artista" lido ao contrário e tira
   // "(Ao Vivo)", "Ato 3 - 04"… do título do vídeo, antes da pesquisa e da cifra.
   const pages: CifraPage[] = await findCifraPages(title, clean(input.artist)).catch(() => [])
   const name = pages[0] ? { title: pages[0].title, artist: pages[0].artist } : { title, artist: clean(input.artist) }
 
-  // Cifra, catálogo e pesquisa ao mesmo tempo: a cifra não espera a IA.
-  const [sheetFound, track, ai] = await Promise.all([
+  // Cifra, catálogo e busca na web ao mesmo tempo.
+  const [sheet, track, results] = await Promise.all([
     fetchSheet(name.title, name.artist, { pages }).catch(() => null),
     deezerId ? deezerTrack(deezerId).catch(() => null) : Promise.resolve(null),
-    apiKey
-      ? research({ ...input, ...name }, apiKey, pages[0]?.url ?? null).catch((e): Research => ({ error: aiError(e) }))
-      : Promise.resolve<Research>({ error: 'sem-chave' }),
+    key ? searchSong(name, !video, key) : Promise.resolve<WebResult[]>([]),
   ])
 
-  const base = { ia: false, year: track?.year ?? null, bpm: track?.bpm ?? null, title: pages[0]?.title ?? null, artist: pages[0]?.artist ?? null }
-  const f = 'error' in ai ? null : ai.ficha
-  const aiErr = 'error' in ai ? ai.error : null
-  if (aiErr) console.warn(`[ficha] IA: ${aiErr}`)
-  const sources = 'error' in ai ? [] : ai.sources
+  const base = {
+    ia: false,
+    year: track?.year ?? null,
+    bpm: track?.bpm ?? null,
+    title: pages[0]?.title ?? null,
+    artist: pages[0]?.artist ?? null,
+    content: sheet?.content ?? null,
+    sourceUrl: sheet?.sourceUrl ?? null,
+  }
+  if (!key) return { ...base, aiError: 'sem-chave' }
 
-  // A busca não achou a cifra (ou só a letra) e a IA citou outra página: tenta essa página.
-  let sheet = sheetFound
-  const cited = f?.cifraUrl ? safeUrl(f.cifraUrl) : null
-  const left = deadline - Date.now()
-  if (cited && (!sheet || sheet.source === 'lrclib') && !pages.some((p) => p.url === cited) && left > 8000)
-    sheet = (await sheetFromPage(cited, Math.min(25_000, left - 3000)).catch(() => null)) ?? sheet
+  let f: FichaIA
+  try {
+    const lyrics = sheet ? lyricsOnly(sheet.content) : ''
+    f = await askJson<FichaIA>(SYSTEM_FICHA, fichaPrompt(input, name, video, lyrics, results), key, Math.max(15_000, Math.min(75_000, deadline - Date.now())))
+  } catch (e) {
+    const code = e instanceof AIError ? e.code : 'falhou'
+    console.warn(`[ficha] IA: ${code}`)
+    return { ...base, aiError: code }
+  }
 
-  if (!f) return { ...base, aiError: aiErr, content: sheet?.content ?? null, sourceUrl: sheet?.sourceUrl ?? null }
+  // Cada dado da gravação só entra com a fonte; links só os que apareceram na busca.
+  const at = (n: unknown) => (typeof n === 'number' && Number.isInteger(n) && n >= 1 && n <= results.length ? results[n - 1] : null)
+  const cited = new Set<WebResult>()
+  const sourced = <T>(c: Cited<T> | null | undefined): T | null => {
+    const r = at(c?.source)
+    if (c?.value === null || c?.value === undefined || !r) return null
+    cited.add(r)
+    return c.value
+  }
+  const linkFrom = (n: unknown, isOk: (url: string) => boolean) => {
+    const r = at(n)
+    if (!r || !isOk(r.url)) return null
+    cited.add(r)
+    return r.url
+  }
+  const [youtubeUrl, spotifyUrl] = await Promise.all([
+    video ?? checkYouTube(linkFrom(f.youtube, (u) => !!youtubeId(u))),
+    checkSpotify(linkFrom(f.spotify, (u) => !!spotifyTrackId(u))),
+  ])
 
-  const [youtubeUrl, spotifyUrl] = await Promise.all([chosenVideo(input) ?? checkYouTube(f.youtubeUrl), checkSpotify(f.spotifyUrl)])
+  // Arranjo: só o que uma fonte descreve; na dúvida, fica vazio (nada de sugestão).
+  const arrSource = at(f.arrangement?.source)
+  const arrangement = arrSource && describesArrangement(arrSource) ? texts(f.arrangement?.notes).slice(0, 8) : []
+  if (arrangement.length && arrSource) cited.add(arrSource)
+
+  const bpm = plausibleBpm(Number(sourced(f.bpm)) || null)
+  const timeSignature = sourced(f.timeSignature)
+  const tempo = typeof f.tempo === 'string' && TEMPOS.includes(f.tempo) ? (f.tempo as 'lenta' | 'moderada' | 'rapida') : null
   return {
     ...base,
     ia: true,
     youtubeUrl,
     spotifyUrl,
-    cifraUrl: sheet?.sourceUrl ?? safeUrl(f.cifraUrl),
-    originalKey: cleanKey(f.originalKey) ?? sheet?.originalKey ?? null,
-    // O BPM do Deezer às vezes vem dobrado ou pela metade; o da pesquisa vem primeiro.
-    bpm: plausibleBpm(f.bpm) ?? base.bpm,
-    timeSignature: f.timeSignature && TIME_SIGNATURES.includes(f.timeSignature) ? f.timeSignature : null,
-    tempo: f.tempo,
-    themes: [...new Set(f.themes)].filter((id) => themeIds.has(id)).slice(0, 4),
-    moments: [...new Set(f.moments)].filter((id) => momentIds.has(id)).slice(0, 3),
-    meaning: clean(f.meaning),
-    bibleRefs: f.bibleRefs.map(clean).filter(Boolean).slice(0, 4),
-    arrangementNotes: f.arrangementNotes
-      .split('\n')
-      .map(clean)
-      .filter(Boolean)
-      .join('\n'),
-    content: sheet?.content ?? null,
-    sourceUrl: sheet?.sourceUrl ?? null,
-    sources: sources.slice(0, 8),
+    cifraUrl: sheet?.sourceUrl ?? null,
+    // O tom da cifra vale mais (é nele que a equipe toca); sem cifra, o tom que uma fonte informa.
+    originalKey: sheet ? sheet.originalKey : cleanKey(sourced(f.originalKey)),
+    // O BPM do Deezer às vezes vem dobrado ou pela metade; o de uma fonte da busca vem primeiro.
+    bpm: bpm ?? base.bpm,
+    timeSignature: typeof timeSignature === 'string' && TIME_SIGNATURES.includes(timeSignature) ? timeSignature : null,
+    tempo,
+    themes: ids(f.themes, themeIds, 4),
+    moments: ids(f.moments, momentIds, 3),
+    meaning: typeof f.meaning === 'string' ? clean(f.meaning) : '',
+    bibleRefs: texts(f.bibleRefs).filter(isBibleRef).slice(0, 4),
+    arrangementNotes: arrangement.join('\n'),
+    sources: [...cited, ...results.filter((r) => !cited.has(r))].slice(0, 8).map((r) => ({ url: r.url, title: r.title })),
   }
 }
 
@@ -583,7 +649,7 @@ async function spotifyMetadata(url: string) {
 }
 
 // ---------------------------------------------------------------------------
-// Análise da letra colada pela equipe
+// Análise da letra (temas, momentos, significado e referências)
 // ---------------------------------------------------------------------------
 
 interface AnalyzeInput {
@@ -595,35 +661,21 @@ interface AnalyzeInput {
 }
 
 const SYSTEM_ANALISE = `Você ajuda um ministério de louvor de uma igreja evangélica brasileira a organizar o repertório.
-Recebe o título, o artista e (quando houver) a letra que a equipe colou, e devolve uma ficha da música em JSON.
+Recebe o título, o artista e (quando houver) a letra da música, e devolve uma ficha em JSON, no formato do exemplo.
 
 Regras:
 - Escolha temas e momentos SOMENTE entre os ids fornecidos. Temas: os 2 a 4 mais centrais. Momentos: 1 a 3 em que a música funciona bem no culto.
 - "meaning": 2 ou 3 frases em português do Brasil explicando a mensagem da música e quando ela edifica (ex.: depois de uma palavra sobre fidelidade). Escreva com suas palavras; não copie versos.
-- "bibleRefs": até 3 referências bíblicas que dialogam com a mensagem (formato "Salmos 23:1").
-- "tempo": lenta, moderada ou rapida, pelo caráter da música.
-- "bpm": só se você conhece a gravação original com segurança; senão null.
-- Nunca escreva, complete ou reproduza a letra da música.`
+- "bibleRefs": até 3 referências bíblicas que dialogam com a mensagem (formato "Salmos 23:1"). Só referências que você tem certeza que existem.
+- "tempo": "lenta", "moderada" ou "rapida", pelo caráter da música.
+- Nunca escreva, complete ou reproduza a letra da música.
 
-const ANALYSIS_SCHEMA = {
-  type: 'object',
-  properties: {
-    themes: { type: 'array', items: { type: 'string' } },
-    moments: { type: 'array', items: { type: 'string' } },
-    meaning: { type: 'string' },
-    bibleRefs: { type: 'array', items: { type: 'string' } },
-    tempo: { anyOf: [{ type: 'string', enum: ['lenta', 'moderada', 'rapida'] }, { type: 'null' }] },
-    bpm: { anyOf: [{ type: 'integer' }, { type: 'null' }] },
-  },
-  required: ['themes', 'moments', 'meaning', 'bibleRefs', 'tempo', 'bpm'],
-  additionalProperties: false,
-}
+Exemplo de JSON:
+{"themes": ["fidelidade", "esperanca"], "moments": ["ministracao"], "meaning": "…", "bibleRefs": ["Lamentações 3:22-23"], "tempo": "lenta"}`
 
 async function analyze(input: AnalyzeInput) {
-  const apiKey = Deno.env.get('ANTHROPIC_API_KEY')
-  if (!apiKey) return { error: 'sem-chave' }
-  const client = new Anthropic({ apiKey })
-
+  const key = Deno.env.get('DEEPSEEK_API_KEY')
+  if (!key) return { error: 'sem-chave' }
   const themeIds = new Set((input.themes ?? []).map((t) => t.id))
   const momentIds = new Set((input.moments ?? []).map((m) => m.id))
   const catalog = [catalogText('Temas disponíveis (id: nome — descrição):', input.themes ?? []), '', catalogText('Momentos do culto (id: nome):', input.moments ?? [])].join('\n')
@@ -631,36 +683,17 @@ async function analyze(input: AnalyzeInput) {
   const song = [
     `Título: ${input.title || '(sem título)'}`,
     `Artista: ${input.artist || '(não informado)'}`,
-    lyrics ? `\nLetra colada pela equipe:\n<letra>\n${lyrics}\n</letra>` : '\n(Sem letra: use o que você sabe da música, se a conhecer.)',
+    lyrics ? `\nLetra:\n<letra>\n${lyrics}\n</letra>` : '\n(Sem letra: use o que você sabe da música, se a conhecer.)',
   ].join('\n')
 
-  const response = await client.beta.messages.create({
-    model: MODEL,
-    max_tokens: 4000,
-    betas: ['server-side-fallback-2026-07-01'],
-    fallbacks: 'default',
-    output_config: { effort: 'low', format: { type: 'json_schema', schema: ANALYSIS_SCHEMA } },
-    system: SYSTEM_ANALISE,
-    messages: [{ role: 'user', content: `${catalog}\n\n${song}` }],
-  })
-
-  if (response.stop_reason === 'refusal') return { error: 'recusado' }
-  const text = response.content.flatMap((b) => (b.type === 'text' ? [b.text] : [])).join('')
-  const out = JSON.parse(text) as {
-    themes: string[]
-    moments: string[]
-    meaning: string
-    bibleRefs: string[]
-    tempo: 'lenta' | 'moderada' | 'rapida' | null
-    bpm: number | null
-  }
+  const out = await askJson<{ themes?: unknown; moments?: unknown; meaning?: unknown; bibleRefs?: unknown; tempo?: unknown }>(SYSTEM_ANALISE, `${catalog}\n\n${song}`, key, 60_000)
   return {
-    themes: out.themes.filter((t) => themeIds.has(t)).slice(0, 4),
-    moments: out.moments.filter((m) => momentIds.has(m)).slice(0, 3),
-    meaning: out.meaning.trim(),
-    bibleRefs: out.bibleRefs.slice(0, 3),
-    tempo: out.tempo,
-    bpm: plausibleBpm(out.bpm),
+    themes: ids(out.themes, themeIds, 4),
+    moments: ids(out.moments, momentIds, 3),
+    meaning: typeof out.meaning === 'string' ? out.meaning.trim() : '',
+    bibleRefs: texts(out.bibleRefs).filter(isBibleRef).slice(0, 3),
+    tempo: typeof out.tempo === 'string' && TEMPOS.includes(out.tempo) ? out.tempo : null,
+    bpm: null,
   }
 }
 
@@ -692,7 +725,7 @@ Deno.serve(async (req) => {
   try {
     const body = await req.json()
     // Só diz o que está ligado (sem chamar nada lá fora), então não precisa de login.
-    if (body.action === 'status') return json({ ia: !!Deno.env.get('ANTHROPIC_API_KEY'), youtube: !!Deno.env.get('YOUTUBE_API_KEY') })
+    if (body.action === 'status') return json({ ia: !!Deno.env.get('DEEPSEEK_API_KEY'), youtube: !!Deno.env.get('YOUTUBE_API_KEY') })
     if (!(await signedIn(req))) return json({ error: 'entre na sua conta' }, 401)
     if (body.action === 'buscar') return json(await search(String(body.q ?? '')))
     if (body.action === 'completar') return json(await complete(body as CompleteInput))
@@ -706,9 +739,8 @@ Deno.serve(async (req) => {
     if (body.action === 'cifra') return json(await buscarCifra(body as { title?: string; artist?: string; cifraUrl?: string | null }))
     return json({ error: 'ação desconhecida' }, 400)
   } catch (e) {
-    if (e instanceof Anthropic.RateLimitError) return json({ error: 'limite' }, 429)
-    if (e instanceof Anthropic.AuthenticationError) return json({ error: 'chave inválida' }, 500)
-    if (e instanceof Anthropic.APIError) return json({ error: `api ${e.status}` }, 502)
+    // Erro da IA volta com o código para o app mostrar o aviso certo (sem chave, sem saldo…).
+    if (e instanceof AIError) return json({ error: e.code })
     return json({ error: e instanceof Error ? e.message : 'erro' }, 500)
   }
 })

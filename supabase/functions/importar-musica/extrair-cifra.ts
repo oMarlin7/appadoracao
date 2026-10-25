@@ -105,6 +105,18 @@ function hasChordLine(text: string): boolean {
   })
 }
 
+/** Só a letra (sem as linhas de acordes nem tablaturas), para a IA ler. */
+export function lyricsOnly(content: string): string {
+  return normalizeText(
+    content
+      .split('\n')
+      .filter((l) => !hasChordLine(l) && !/^[A-Ga-g]?\|?[-\d|hp/\\~x ]{6,}\|?$/.test(l.trim()))
+      // "[Intro] C  Am" → "[Intro]"
+      .map((l) => l.trim().replace(/^(\[[^\]]+\])\s+(.+)$/, (all, label: string, rest: string) => (hasChordLine(rest) ? label : all)))
+      .join('\n'),
+  )
+}
+
 function looksLikeSheet(text: string): boolean {
   const t = text.trim()
   if (t.length < 20) return false

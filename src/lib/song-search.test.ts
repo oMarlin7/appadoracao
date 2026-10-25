@@ -40,6 +40,7 @@ describe('ficha vinda do servidor', () => {
   it('mensagens claras quando a IA não completa', () => {
     expect(aiErrorMessage(undefined)).toBeNull()
     expect(aiErrorMessage('sem-chave')).toMatch(/chave/)
+    expect(aiErrorMessage('sem-saldo')).toMatch(/saldo/)
     expect(aiErrorMessage('qualquer')).toMatch(/Não deu/)
   })
 

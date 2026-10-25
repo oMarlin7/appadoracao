@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { parseSheet } from '@/lib/music/sheet'
-import { cleanSongTitle, extractSheetFromHtml, isChordToken, jinaHtmlToSheet, jinaMarkdownToSheet, pickCifraPages, type CifraPage } from './extrair-cifra.ts'
+import { cleanSongTitle, extractSheetFromHtml, isChordToken, jinaHtmlToSheet, jinaMarkdownToSheet, lyricsOnly, pickCifraPages, type CifraPage } from './extrair-cifra.ts'
 
 /** Acorde → trecho da letra logo abaixo dele, como o app mostra. */
 function chordOver(content: string): Array<[string, string]> {
@@ -195,5 +195,12 @@ describe('escolha da página da cifra', () => {
   it('não aceita outra música', () => {
     expect(pickCifraPages(aline, 'Ao Único', 'Aline Barros')).toEqual([])
     expect(pickCifraPages(grande, 'Senhor', 'Fulano')).toEqual([])
+  })
+})
+
+describe('letra para a IA', () => {
+  it('tira acordes e tablaturas e deixa letra e seções', () => {
+    const cifra = '[Intro] C  Am  F  G\n\nE|---0---2---|\n\n[Primeira Parte]\nC              Am\nSanto, santo é o Senhor\n  F       G\nDigno de louvor'
+    expect(lyricsOnly(cifra)).toBe('[Intro]\n\n[Primeira Parte]\nSanto, santo é o Senhor\nDigno de louvor')
   })
 })

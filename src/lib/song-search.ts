@@ -332,6 +332,8 @@ export function aiErrorMessage(code: string | undefined): string | null {
       return 'A ficha automática funciona com o app conectado ao servidor.'
     case 'chave-invalida':
       return 'A chave da IA no servidor não é válida.'
+    case 'sem-saldo':
+      return 'A conta da IA está sem saldo. Coloque crédito em platform.deepseek.com.'
     case 'limite':
       return 'Muitas buscas seguidas. Tente de novo em instantes.'
     case 'tempo':

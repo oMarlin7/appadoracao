@@ -19,7 +19,7 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 **Cadastro pelo nome (o jeito principal de cadastrar)**
 1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem os **vídeos do YouTube**, com o nome certo da música e do artista (mesmo quando o vídeo vem como "Música - Artista"), versão (*Ao Vivo*, *Playback*…) e duração. O catálogo do Deezer só entra no lugar se o YouTube não responder.
 2. **Toque na imagem** para **ouvir um trecho de 30 segundos** ali mesmo, sem abrir o vídeo, e confirmar que é a música certa.
-3. **Toque no vídeo certo** e o app monta a ficha sozinho, com esse vídeo guardado na música: capa, **tom original e BPM**, ritmo, **temas e momentos do culto** e um rascunho do **significado**, tirados da própria cifra e do catálogo. Com a chave da IA (opcional, paga) a ficha vem completa: Spotify, compasso, **significado**, **referências bíblicas** e **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina), com as fontes consultadas.
+3. **Toque no vídeo certo** e o app monta a ficha sozinho, com esse vídeo guardado na música: capa, **tom original e BPM**, ritmo, **temas e momentos do culto** e um rascunho do **significado**, tirados da própria cifra e do catálogo. Com a chave da IA (opcional, paga) o app também pesquisa na web: Spotify, compasso, **significado**, **referências bíblicas** e, quando alguma página descreve a gravação, **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina), sempre com as fontes consultadas. O que nenhuma fonte confirma fica em branco.
 4. **Cifra e letra entram sozinhas**: o app acha a página da música pela busca do próprio Cifra Club e importa o texto com cada acorde em cima da sílaba certa, mostrando a fonte. Se o site demorar, toque em **Buscar de novo**.
 5. Confira e salve. Tudo continua editável, e o **BPM no toque** fica à mão para ajustar o andamento.
 - Também dá para **colar um link** do YouTube/Spotify, cadastrar **vários links de uma vez** (a cifra de cada uma entra sozinha; as que não forem encontradas ficam com a etiqueta *sem-cifra*) ou **preencher à mão**.
@@ -114,12 +114,15 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_...
 Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env.local` e preencha as mesmas variáveis. (`npm run dev` continua em modo demonstração sem o `.env.local`; `npm run build` usa o `.env.production`.)
 
 ### Busca pelo nome, cifra e ficha automática (função do servidor; chave da IA opcional)
-A função `importar-musica` faz a busca pelo nome, traz os dados dos links, importa a cifra e monta a ficha. **Sem a chave da IA, tudo isso funciona de graça**: busca no YouTube com prévia de 30 s, nome certo da música, cifra e letra, capa, BPM do catálogo, tom pela cifra e temas e momentos pela letra. **A chave da API do Claude é opcional e paga**: com ela, o app também pesquisa na web e escreve o significado, as referências bíblicas e as notas de arranjo, e acha o Spotify e o compasso.
+A função `importar-musica` faz a busca pelo nome, traz os dados dos links, importa a cifra e monta a ficha. **Sem a chave da IA, tudo isso funciona de graça**: busca no YouTube com prévia de 30 s, nome certo da música, cifra e letra, capa, BPM do catálogo, tom pela cifra e temas e momentos pela letra. **A chave da IA ([DeepSeek](https://platform.deepseek.com)) é opcional e paga**: com ela, o app também pesquisa a música na web e escreve o significado e as referências bíblicas, e acha o Spotify, o BPM e o compasso da gravação.
 
-1. Crie a chave em [console.anthropic.com](https://console.anthropic.com) → *API Keys* (a conta precisa de créditos em *Billing*; dá para definir um limite de gasto mensal em *Limits*).
-2. No painel do Supabase: **Edge Functions → Secrets → Add new secret**, nome `ANTHROPIC_API_KEY`, valor = a chave.
+- **Nada é inventado**: dado da gravação (Spotify, tom, BPM, compasso, arranjo) só entra se veio de uma página encontrada na busca, que aparece em *Fontes consultadas*. **Notas de arranjo** só quando uma fonte descreve como a gravação é tocada; sem isso, o campo fica vazio (o app não sugere arranjo). Referências bíblicas com livro ou capítulo que não existem ficam de fora.
+- O tom que vale é o da cifra importada (é nele que a equipe toca).
 
-**Custo**: só com a chave, e só quando alguém cadastra uma música pelo nome — em geral entre US$ 0,20 e US$ 0,40 por música (a IA e as buscas na web). Sem ela, nada é cobrado.
+1. Crie a conta em [platform.deepseek.com](https://platform.deepseek.com), coloque crédito em *Top up* (o uso é descontado do saldo) e crie a chave em *API Keys*.
+2. No painel do Supabase: **Edge Functions → Secrets → Add new secret**, nome `DEEPSEEK_API_KEY`, valor = a chave.
+
+**Custo**: só com a chave, e só quando alguém cadastra uma música pelo nome — cerca de US$ 0,01 por música (4 ou 5 buscas na web a US$ 0,75 por mil, mais o modelo `deepseek-flash`, que custa metade fora do horário de pico; no Brasil o pico cai de madrugada). Sem saldo, o app avisa e continua com a ficha gratuita. Os dados enviados (nome, artista e letra da música) são processados pela DeepSeek, em servidores na China.
 
 Para publicar a função num projeto novo, com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
 
@@ -127,7 +130,7 @@ Para publicar a função num projeto novo, com a [CLI do Supabase](https://supab
 supabase login
 supabase link --project-ref SEU-PROJETO
 supabase functions deploy importar-musica --no-verify-jwt   # a própria função confere o login
-supabase secrets set ANTHROPIC_API_KEY=sk-ant-...
+supabase secrets set DEEPSEEK_API_KEY=sk-...
 ```
 
 A função está em [`supabase/functions/importar-musica`](supabase/functions/importar-musica/index.ts) e só atende membros logados. A página da cifra vem da busca do próprio Cifra Club (o endereço não dá para adivinhar: *Grande é o Senhor* fica em `grande-o-senhor` num artista e em `grande--o-senhor` em outro), e o texto é lido do bloco da cifra com os espaços intactos, então cada acorde fica em cima da sílaba certa. Para conferir o que está ligado no servidor: `{ "action": "status" }` devolve se há chave da IA e do YouTube (sem mostrar as chaves).

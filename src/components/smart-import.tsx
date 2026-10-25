@@ -502,7 +502,7 @@ function FillProgress({
       {!filling && error && (
         <div className="mt-2 flex flex-wrap items-center gap-2 rounded-2xl bg-butter px-3.5 py-2.5 text-[13px] font-semibold text-butter-ink">
           {error}
-          {details?.aiError !== 'sem-chave' && details?.aiError !== 'sem-servidor' && (
+          {!['sem-chave', 'sem-servidor', 'sem-saldo', 'chave-invalida'].includes(details?.aiError ?? '') && (
             <button type="button" onClick={onRetry} className="font-extrabold underline underline-offset-2">
               Tentar de novo
             </button>

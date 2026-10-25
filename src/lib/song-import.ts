@@ -143,9 +143,8 @@ let aiUnavailable = isDemo
 export const aiAvailable = () => !aiUnavailable
 
 /**
- * Análise com IA (Claude, pela função do servidor) — usa só o título, o artista e a letra
- * que a equipe colou. Sem servidor ou sem chave configurada, devolve null e o app usa a
- * análise local.
+ * Análise com IA (DeepSeek, pela função do servidor) — usa só o título, o artista e a letra
+ * da música. Sem servidor ou sem chave configurada, devolve null e o app usa a análise local.
  */
 export async function analyzeWithAI(input: { title: string; artist: string; lyrics: string }): Promise<SongAnalysis | null> {
   if (aiUnavailable) return null
