@@ -230,8 +230,8 @@ function Covers({ songIds }: { songIds: Id[] }) {
   )
 }
 
-function Dots({ values, label, color }: { values: Array<'presente' | 'justificada' | 'falta' | 'sem'>; label: string; color: Pastel }) {
-  const tone = { presente: 'var(--mint-solid)', justificada: 'var(--butter-solid)', falta: 'var(--rose-solid)', sem: 'var(--surface-3)' }
+function Dots({ values, label, color }: { values: Array<'presente' | 'atraso' | 'justificada' | 'falta' | 'sem'>; label: string; color: Pastel }) {
+  const tone = { presente: 'var(--mint-solid)', atraso: 'var(--peach-solid)', justificada: 'var(--butter-solid)', falta: 'var(--rose-solid)', sem: 'var(--surface-3)' }
   return (
     <div className="flex shrink-0 flex-col items-center gap-2">
       <span className="text-[22px] leading-none font-extrabold tabular-nums" style={{ color: ink(color) }}>

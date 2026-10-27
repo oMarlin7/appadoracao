@@ -1,4 +1,4 @@
-import { isJustified, memberStats } from './attendance'
+import { hasStarted, isJustified, memberStats } from './attendance'
 import { EVENT_KIND_BY_ID, eventKind, isPresentation } from './events'
 import { ABSENCE_REASON_BY_ID, ROLE_BY_ID, type Pastel } from './taxonomy'
 import { addDays, daysBetween, firstName, parseLocalDate, plural, toLocalDateString, weekdayName } from './utils'
@@ -15,7 +15,7 @@ export type InboxVisual =
   | { type: 'countdown'; to: string }
   | { type: 'covers'; songIds: Id[] }
   | { type: 'avatars'; userIds: Id[]; label: string }
-  | { type: 'dots'; values: Array<'presente' | 'justificada' | 'falta' | 'sem'>; label: string }
+  | { type: 'dots'; values: Array<'presente' | 'atraso' | 'justificada' | 'falta' | 'sem'>; label: string }
   | { type: 'date'; date: string; time: string | null }
   | { type: 'icon'; icon: string }
 
@@ -85,6 +85,8 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
   const record = (serviceId: Id, userId: Id) => byService.get(serviceId)?.find((a) => a.userId === userId)
   const sorted = ctx.services.slice().sort((a, b) => (a.date + (a.time ?? '')).localeCompare(b.date + (b.time ?? '')))
   const upcoming = sorted.filter((s) => s.date >= today)
+  // Depois do horário de início não se pede mais confirmação: a presença já é o que aconteceu.
+  const notStarted = upcoming.filter((s) => !hasStarted(s, now))
   const daysTo = (s: Service) => daysBetween(parseLocalDate(today), parseLocalDate(s.date))
   const profileById = new Map(ctx.profiles.map((p) => [p.id, p]))
   const songTitle = (id: Id) => ctx.songs[id]?.title ?? 'música'
@@ -107,7 +109,7 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
   }
 
   // ---- Escala do próximo evento ----------------------------------------------------------
-  const myNext = upcoming.find((s) => isPresentation(s) && daysTo(s) <= 14 && s.team.some((t) => t.userId === me.id))
+  const myNext = notStarted.find((s) => isPresentation(s) && daysTo(s) <= 14 && s.team.some((t) => t.userId === me.id))
   if (myNext) {
     const roles = myNext.team.filter((t) => t.userId === me.id).map((t) => ROLE_BY_ID[t.role]?.name ?? t.role)
     const r = record(myNext.id, me.id)
@@ -133,7 +135,7 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
   }
 
   // ---- Ensaio ----------------------------------------------------------------------------
-  const rehearsal = upcoming.find((s) => eventKind(s) === 'ensaio' && daysTo(s) <= 7 && (!s.team.length || s.team.some((t) => t.userId === me.id)))
+  const rehearsal = notStarted.find((s) => eventKind(s) === 'ensaio' && daysTo(s) <= 7 && (!s.team.length || s.team.some((t) => t.userId === me.id)))
   if (rehearsal) {
     const r = record(rehearsal.id, me.id)
     const d = daysTo(rehearsal)
@@ -263,7 +265,7 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
   // ---- Falta sem justificativa -----------------------------------------------------------
   const from30 = toLocalDateString(addDays(now, -30))
   for (const s of sorted) {
-    if (s.date >= today || s.date < from30) continue
+    if (!hasStarted(s, now) || s.date < from30) continue
     const r = record(s.id, me.id)
     if (r?.status === 'ausente' && !isJustified(r)) {
       items.push({
@@ -283,16 +285,18 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
 
   // ---- Frequência ------------------------------------------------------------------------
   const from90 = toLocalDateString(addDays(now, -90))
-  const stats = memberStats(ctx.services, ctx.attendance, { today, from: from90 }).get(me.id)
+  const stats = memberStats(ctx.services, ctx.attendance, { now, from: from90 }).get(me.id)
   const counted = stats ? stats.present + stats.justified + stats.unjustified : 0
   if (stats && stats.rate !== null && counted >= 3) {
     const pct = Math.round(stats.rate * 100)
     const lastSix = sorted
-      .filter((s) => s.date < today && s.date >= from90 && (s.team.some((t) => t.userId === me.id) || record(s.id, me.id)))
+      .filter((s) => hasStarted(s, now) && s.date >= from90 && (s.team.some((t) => t.userId === me.id) || record(s.id, me.id)))
       .slice(-6)
       .map((s) => {
         const r = record(s.id, me.id)
-        return !r ? ('sem' as const) : r.status === 'ausente' ? (isJustified(r) ? ('justificada' as const) : ('falta' as const)) : ('presente' as const)
+        if (!r) return 'sem' as const
+        if (r.status === 'ausente') return isJustified(r) ? ('justificada' as const) : ('falta' as const)
+        return r.status === 'atrasado' ? ('atraso' as const) : ('presente' as const)
       })
     const month = today.slice(0, 7)
     if (stats.rate >= 0.85)
@@ -324,7 +328,7 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
 
   // ---- Pendências do líder ---------------------------------------------------------------
   if (isLeader) {
-    const nextEvent = upcoming.find((s) => isPresentation(s) && daysTo(s) <= 10)
+    const nextEvent = notStarted.find((s) => isPresentation(s) && daysTo(s) <= 10)
     if (nextEvent) {
       const info = votingInfo(nextEvent, ctx.team, ctx.polls[nextEvent.id], now)
       if (!nextEvent.items.length && info.phase !== 'aberta' && info.phase !== 'agendada')
@@ -355,7 +359,7 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
           visual: { type: 'avatars', userIds: pending, label: 'sem resposta' },
         })
     }
-    for (const s of upcoming.filter((x) => daysTo(x) <= 14)) {
+    for (const s of notStarted.filter((x) => daysTo(x) <= 14)) {
       for (const a of byService.get(s.id) ?? []) {
         if (a.status !== 'ausente' || a.userId === me.id || !s.team.some((t) => t.userId === a.userId)) continue
         const p = profileById.get(a.userId)

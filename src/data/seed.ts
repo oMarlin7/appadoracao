@@ -341,11 +341,11 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
   for (const p of prefs) out.song_prefs[p.id] = p
 
   // ---- Presença ------------------------------------------------------------------------
-  const presence: Array<[string, string, Attendance['status'], string | null, string]> = [
+  const presence: Array<[string, string, Attendance['status'], string | null, string, string?]> = [
     ['svc-passado-1', 'demo-julia', 'presente', null, ''],
     ['svc-passado-1', 'demo-lucas', 'presente', null, ''],
     ['svc-passado-1', 'demo-gabriel', 'ausente', 'saude', 'Gripado, avisei no grupo na sexta.'],
-    ['svc-passado-1', 'demo-pedro', 'presente', null, ''],
+    ['svc-passado-1', 'demo-pedro', 'atrasado', null, 'Avisou que pegou trânsito.', '19:47'],
     ['svc-passado-2', 'demo-ana', 'presente', null, ''],
     ['svc-passado-2', 'demo-beatriz', 'presente', null, ''],
     ['svc-passado-3', 'demo-ana', 'presente', null, ''],
@@ -359,11 +359,11 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     ['svc-celebracao', 'demo-beatriz', 'confirmado', null, ''],
     ['svc-celebracao', 'demo-rafael', 'ausente', 'viagem', 'Viagem a trabalho, volto na segunda. Já falei com o Pedro para cobrir o baixo.'],
   ]
-  for (const [serviceId, userId, status, reason, note] of presence) {
+  for (const [serviceId, userId, status, reason, note, arrivedAt = null] of presence) {
     if (!out.services[serviceId]) continue
     const svc = out.services[serviceId]
-    const markedBy = status === 'presente' || (status === 'ausente' && !note) ? svc.leaderId : userId
-    const a: Attendance = { id: `${serviceId}:${userId}`, serviceId, userId, status, reason, note, markedBy, createdAt: svc.updatedAt, updatedAt: svc.updatedAt }
+    const markedBy = status === 'presente' || status === 'atrasado' || (status === 'ausente' && !note) ? svc.leaderId : userId
+    const a: Attendance = { id: `${serviceId}:${userId}`, serviceId, userId, status, reason, note, arrivedAt, markedBy, createdAt: svc.updatedAt, updatedAt: svc.updatedAt }
     out.attendance[a.id] = a
   }
 

@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
-import { Check, CheckCheck, CircleHelp, Eraser, X } from 'lucide-react'
+import { Check, CheckCheck, CircleHelp, Clock, Eraser, X } from 'lucide-react'
 import { Avatar } from '@/components/avatar'
 import { Button } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
-import { Card, Chip, Field, SectionTitle, Textarea } from '@/components/ui/primitives'
+import { Card, Chip, Field, Input, SectionTitle, Textarea } from '@/components/ui/primitives'
 import { Sheet } from '@/components/ui/sheet'
 import { attendanceId, clearAttendance, setAttendance } from '@/lib/actions'
-import { expectedMembers, isJustified } from '@/lib/attendance'
+import { clockNow, expectedMembers, hasStarted, isJustified, minutesLate } from '@/lib/attendance'
 import { useMe, useRows, useTable } from '@/lib/store'
 import { ABSENCE_REASONS, ABSENCE_REASON_BY_ID, ROLE_BY_ID } from '@/lib/taxonomy'
 import { cn, firstName, plural, todayString } from '@/lib/utils'
@@ -17,12 +17,22 @@ import type { Attendance, Id, Service } from '@/types'
 // Selo de situação
 // ---------------------------------------------------------------------------
 
-export function AttendancePill({ record, past, className }: { record?: Attendance; past: boolean; className?: string }) {
+/** "chegou às 19:42 (+12 min)" + a observação, para a linha embaixo do nome. */
+export function lateDetail(record: Pick<Attendance, 'arrivedAt' | 'note'>, service?: Pick<Service, 'time'>): string {
+  const min = service ? minutesLate(service, record) : null
+  return [record.arrivedAt && `chegou às ${record.arrivedAt}${min ? ` (+${min} min)` : ''}`, record.note && `“${record.note}”`].filter(Boolean).join(' · ')
+}
+
+export function AttendancePill({ record, past, service, className }: { record?: Attendance; past: boolean; service?: Pick<Service, 'time'>; className?: string }) {
   let cls = 'bg-surface-2 text-muted'
   let label = past ? 'Sem registro' : 'Sem resposta'
   if (record?.status === 'presente') {
     cls = 'bg-mint text-mint-ink'
     label = 'Presente'
+  } else if (record?.status === 'atrasado') {
+    const min = service ? minutesLate(service, record) : null
+    cls = 'bg-peach text-peach-ink'
+    label = min ? `Atrasado · ${min} min` : 'Atrasado'
   } else if (record?.status === 'confirmado') {
     cls = 'bg-mint text-mint-ink'
     label = past ? 'Confirmou' : 'Confirmado'
@@ -36,7 +46,8 @@ export function AttendancePill({ record, past, className }: { record?: Attendanc
       label = past ? 'Faltou' : 'Não vai'
     }
   }
-  return <span className={cn('inline-flex shrink-0 items-center rounded-full px-2.5 py-0.5 text-[12px] font-bold whitespace-nowrap', cls, className)}>{label}</span>
+  // Sem espaço (ex.: ao lado dos botões do líder), o selo encolhe com reticências em vez de ficar por baixo deles.
+  return <span className={cn('inline-block max-w-full shrink-0 truncate rounded-full px-2.5 py-0.5 align-middle text-[12px] font-bold', cls, className)}>{label}</span>
 }
 
 // ---------------------------------------------------------------------------
@@ -119,6 +130,71 @@ export function JustifySheet({
 }
 
 // ---------------------------------------------------------------------------
+// Registrar atraso
+// ---------------------------------------------------------------------------
+
+export function LateSheet({
+  open,
+  onClose,
+  service,
+  userId,
+}: {
+  open: boolean
+  onClose: () => void
+  service: Pick<Service, 'id' | 'title' | 'date' | 'time'>
+  userId: Id
+}) {
+  const profile = useTable('profiles')[userId]
+  const current = useTable('attendance')[attendanceId(service.id, userId)]
+  const [arrivedAt, setArrivedAt] = useState('')
+  const [note, setNote] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    const late = current?.status === 'atrasado'
+    // No dia do evento, o horário de agora (o líder marca na hora em que a pessoa chega).
+    setArrivedAt((late && current.arrivedAt) || (service.date === todayString() ? clockNow() : (service.time ?? '')))
+    setNote(late ? current.note : '')
+  }, [open, current, service.date, service.time])
+  const min = minutesLate(service, { arrivedAt })
+
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={`Atraso de ${firstName(profile?.name ?? 'membro')}`}
+      description={`${service.title}${service.time ? ` · começou às ${service.time}` : ''}`}
+      footer={
+        <Button
+          className="w-full"
+          loading={saving}
+          onClick={async () => {
+            setSaving(true)
+            const ok = await setAttendance(service.id, userId, { status: 'atrasado', arrivedAt: arrivedAt || null, note })
+            setSaving(false)
+            if (ok) {
+              toast.success('Atraso registrado')
+              onClose()
+            }
+          }}
+        >
+          Registrar atraso
+        </Button>
+      }
+    >
+      <div className="space-y-5">
+        <Field label="Chegou às" hint={min ? `${min} min depois do início` : undefined}>
+          {(id) => <Input id={id} type="time" value={arrivedAt} onChange={(e) => setArrivedAt(e.target.value)} />}
+        </Field>
+        <Field label="Observação" hint="opcional">
+          {(id) => <Textarea id={id} rows={2} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Ex.: avisou que pegou trânsito." />}
+        </Field>
+      </div>
+    </Sheet>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Minha resposta (vou / não vou)
 // ---------------------------------------------------------------------------
 
@@ -127,8 +203,8 @@ export function MyRsvp({ service, compact }: { service: Service; compact?: boole
   const record = useTable('attendance')[me ? attendanceId(service.id, me.id) : '']
   const [justify, setJustify] = useState(false)
   if (!me) return null
-  const today = todayString()
-  if (service.date < today) return null
+  // Depois que o evento começa não há mais "vou / não vou": vale o que o líder registrar.
+  if (hasStarted(service)) return null
   const roles = service.team.filter((t) => t.userId === me.id).map((t) => ROLE_BY_ID[t.role]?.name ?? t.role)
   const going = record?.status === 'confirmado' || record?.status === 'presente'
   const absent = record?.status === 'ausente'
@@ -186,20 +262,27 @@ export function ServiceAttendance({ service, canManage }: { service: Service; ca
   const profiles = useTable('profiles')
   const attendance = useRows('attendance')
   const [justifyFor, setJustifyFor] = useState<Id | null>(null)
+  const [lateFor, setLateFor] = useState<Id | null>(null)
   const records = useMemo(() => attendance.filter((a) => a.serviceId === service.id), [attendance, service.id])
   const byUser = useMemo(() => new Map(records.map((r) => [r.userId, r])), [records])
-  const today = todayString()
-  const past = service.date < today
-  const markDay = service.date <= today
+  // Do horário de início em diante, a presença é o que aconteceu (não mais "vai / não vai").
+  const past = hasStarted(service)
+  const markDay = past || service.date <= todayString()
   const members = expectedMembers(service, records)
     .filter((id) => profiles[id])
     .sort((a, b) => profiles[a].name.localeCompare(profiles[b].name, 'pt-BR'))
 
-  const yes = records.filter((r) => r.status !== 'ausente').length
+  const late = records.filter((r) => r.status === 'atrasado').length
+  const yes = records.filter((r) => r.status !== 'ausente' && r.status !== 'atrasado').length
   const no = records.filter((r) => r.status === 'ausente').length
   const pending = members.filter((id) => !byUser.has(id)).length
   const subtitle = members.length
-    ? [yes && (markDay ? plural(yes, 'presente', 'presentes') : plural(yes, 'confirmado', 'confirmados')), no && plural(no, 'ausente', 'ausentes'), pending && `${pending} sem ${past ? 'registro' : 'resposta'}`]
+    ? [
+        yes && (markDay ? plural(yes, 'presente', 'presentes') : plural(yes, 'confirmado', 'confirmados')),
+        late && plural(late, 'atrasado', 'atrasados'),
+        no && plural(no, 'ausente', 'ausentes'),
+        pending && `${pending} sem ${past ? 'registro' : 'resposta'}`,
+      ]
         .filter(Boolean)
         .join(' · ')
     : 'Monte a escala para acompanhar a presença.'
@@ -245,6 +328,7 @@ export function ServiceAttendance({ service, canManage }: { service: Service; ca
                       {roles.join(' · ') || 'Fora da escala'}
                       {r?.status === 'ausente' && r.note ? ` · “${r.note}”` : ''}
                     </div>
+                    {r?.status === 'atrasado' && lateDetail(r, service) && <div className="line-clamp-2 text-[12.5px] leading-snug text-peach-ink">{lateDetail(r, service)}</div>}
                   </div>
                   {canManage && (
                     <div className="flex shrink-0 items-center gap-1">
@@ -254,11 +338,24 @@ export function ServiceAttendance({ service, canManage }: { service: Service; ca
                         onClick={() => void setAttendance(service.id, id, { status: markDay ? 'presente' : 'confirmado' })}
                         className={cn(
                           'grid size-9 place-items-center rounded-full border transition-colors',
-                          r && r.status !== 'ausente' ? 'border-transparent bg-mint text-mint-ink' : 'border-line text-muted hover:bg-surface-2',
+                          r && r.status !== 'ausente' && r.status !== 'atrasado' ? 'border-transparent bg-mint text-mint-ink' : 'border-line text-muted hover:bg-surface-2',
                         )}
                       >
                         <Check className="size-[18px]" strokeWidth={2.6} />
                       </button>
+                      {markDay && (
+                        <button
+                          type="button"
+                          aria-label={`Registrar atraso de ${firstName(p.name)}`}
+                          onClick={() => setLateFor(id)}
+                          className={cn(
+                            'grid size-9 place-items-center rounded-full border transition-colors',
+                            r?.status === 'atrasado' ? 'border-transparent bg-peach text-peach-ink' : 'border-line text-muted hover:bg-surface-2',
+                          )}
+                        >
+                          <Clock className="size-[18px]" strokeWidth={2.4} />
+                        </button>
+                      )}
                       <button
                         type="button"
                         aria-label={`Marcar ausência de ${firstName(p.name)}`}
@@ -285,6 +382,7 @@ export function ServiceAttendance({ service, canManage }: { service: Service; ca
         )}
       </div>
       {justifyFor && <JustifySheet open onClose={() => setJustifyFor(null)} service={service} userId={justifyFor} />}
+      {lateFor && <LateSheet open onClose={() => setLateFor(null)} service={service} userId={lateFor} />}
     </section>
   )
 }

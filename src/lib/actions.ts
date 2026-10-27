@@ -483,12 +483,15 @@ export const attendanceId = (serviceId: Id, userId: Id) => `${serviceId}:${userI
 export async function setAttendance(
   serviceId: Id,
   userId: Id,
-  patch: { status: AttendanceStatus; reason?: string | null; note?: string },
+  patch: { status: AttendanceStatus; reason?: string | null; note?: string; arrivedAt?: string | null },
 ): Promise<boolean> {
   const id = attendanceId(serviceId, userId)
   const prev = getData().attendance[id]
   const now = nowIso()
   const absent = patch.status === 'ausente'
+  const late = patch.status === 'atrasado'
+  // A observação só continua quando a situação continua a mesma (ausência → ausência, atraso → atraso).
+  const keepNote = (absent || late) && prev?.status === patch.status
   const row: Attendance = {
     id,
     serviceId,
@@ -496,7 +499,8 @@ export async function setAttendance(
     status: patch.status,
     // Ao voltar para "presente/confirmado", a justificativa antiga deixa de valer.
     reason: absent ? (patch.reason !== undefined ? patch.reason : (prev?.reason ?? null)) : null,
-    note: absent ? (patch.note !== undefined ? patch.note : (prev?.note ?? '')).trim() : '',
+    note: absent || late ? (patch.note !== undefined ? patch.note : keepNote ? (prev?.note ?? '') : '').trim() : '',
+    arrivedAt: late ? (patch.arrivedAt !== undefined ? patch.arrivedAt : (prev?.arrivedAt ?? null)) : null,
     markedBy: currentUserId(),
     createdAt: prev?.createdAt ?? now,
     updatedAt: now,

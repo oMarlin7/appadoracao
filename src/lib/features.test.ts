@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { memberStats } from './attendance'
+import { hasStarted, memberStats, minutesLate } from './attendance'
 import { cleanChannelName, embedUrl, extractMediaLinks, parseMediaUrl, splitVideoTitle } from './media'
 import { THEMES, THEME_BY_ID, applyCustomThemes, groupThemes, suggestThemes } from './taxonomy'
 import type { Attendance, CustomTheme, Service } from '@/types'
@@ -63,11 +63,11 @@ describe('título do vídeo → música e artista', () => {
 })
 
 describe('presença', () => {
-  const svc = (id: string, date: string, team: string[]): Service => ({
+  const svc = (id: string, date: string, team: string[], time: string | null = null): Service => ({
     id,
     title: id,
     date,
-    time: null,
+    time,
     theme: '',
     bibleText: '',
     notes: '',
@@ -100,7 +100,7 @@ describe('presença', () => {
   ]
 
   it('conta presenças, faltas justificadas e sem justificativa nos cultos que já passaram', () => {
-    const stats = memberStats(services, records, { today: '2026-10-17' })
+    const stats = memberStats(services, records, { now: new Date(2026, 9, 17, 12) })
     expect(stats.get('ana')).toMatchObject({ services: 2, present: 2, justified: 0, unjustified: 0, rate: 1 })
     expect(stats.get('bia')).toMatchObject({ services: 2, present: 0, justified: 1, unjustified: 1, rate: 0 })
     expect(stats.get('caio')).toMatchObject({ services: 1, unmarked: 1, rate: null })
@@ -109,9 +109,33 @@ describe('presença', () => {
   })
 
   it('respeita o período escolhido', () => {
-    const stats = memberStats(services, records, { today: '2026-10-17', from: '2026-10-05' })
+    const stats = memberStats(services, records, { now: new Date(2026, 9, 17, 12), from: '2026-10-05' })
     expect(stats.get('ana')?.services).toBe(1)
     expect(stats.get('bia')).toMatchObject({ justified: 0, unjustified: 1 })
+  })
+
+  it('atraso conta como presença, e o atraso fica registrado', () => {
+    const culto = svc('d', '2026-10-15', ['ana', 'bia'], '19:30')
+    const late = { ...att('d', 'ana', 'atrasado', null, 'trânsito'), arrivedAt: '19:52' }
+    const stats = memberStats([culto], [late, att('d', 'bia', 'presente')], { now: new Date(2026, 9, 17) })
+    expect(stats.get('ana')).toMatchObject({ services: 1, present: 1, late: 1, rate: 1 })
+    expect(stats.get('bia')).toMatchObject({ present: 1, late: 0 })
+    expect(minutesLate(culto, late)).toBe(22)
+    expect(minutesLate(culto, { arrivedAt: '19:10' })).toBe(0)
+    expect(minutesLate({ time: null }, late)).toBeNull()
+  })
+
+  it('no horário do evento, a presença já conta como o que aconteceu', () => {
+    const culto = svc('e', '2026-10-18', ['ana'], '19:00')
+    expect(hasStarted(culto, new Date(2026, 9, 18, 18, 59))).toBe(false)
+    expect(hasStarted(culto, new Date(2026, 9, 18, 19, 0))).toBe(true)
+    expect(hasStarted(culto, new Date(2026, 9, 18, 20, 30))).toBe(true)
+    // Durante o culto a falta já entra na frequência; antes do horário, ainda não.
+    const falta = att('e', 'ana', 'ausente')
+    expect(memberStats([culto], [falta], { now: new Date(2026, 9, 18, 20) }).get('ana')).toMatchObject({ unjustified: 1, rate: 0 })
+    expect(memberStats([culto], [falta], { now: new Date(2026, 9, 18, 18) }).get('ana')).toBeUndefined()
+    // Sem horário, o dia inteiro do evento já conta.
+    expect(hasStarted(svc('f', '2026-10-18', []), new Date(2026, 9, 18, 8))).toBe(true)
   })
 })
 

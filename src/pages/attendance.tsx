@@ -1,19 +1,19 @@
 import { useMemo, useState } from 'react'
 import { Link } from 'react-router'
 import { CalendarCheck, ChevronRight } from 'lucide-react'
-import { AttendancePill, MyRsvp } from '@/components/attendance'
+import { AttendancePill, lateDetail, MyRsvp } from '@/components/attendance'
 import { Avatar } from '@/components/avatar'
 import { HeaderAvatar, Page, PageHeader } from '@/components/layout'
 import { DateBlock } from '@/pages/services'
 import { Card, EmptyState, SectionTitle, Segmented } from '@/components/ui/primitives'
 import { Sheet } from '@/components/ui/sheet'
 import { attendanceId } from '@/lib/actions'
-import { expectedMembers, isJustified, memberStats, type MemberStats } from '@/lib/attendance'
+import { expectedMembers, hasStarted, isJustified, memberStats, minutesLate, type MemberStats } from '@/lib/attendance'
 import { useDocumentTitle, useServices } from '@/lib/hooks'
 import { useMe, useRows, useTable } from '@/lib/store'
 import { ABSENCE_REASON_BY_ID } from '@/lib/taxonomy'
-import { addDays, cn, firstName, friendlyDate, plural, toLocalDateString, todayString } from '@/lib/utils'
-import type { Id, Profile } from '@/types'
+import { addDays, cn, firstName, friendlyDate, plural, toLocalDateString } from '@/lib/utils'
+import type { Attendance, Id, Profile, Service } from '@/types'
 
 type Period = '30' | '90' | 'tudo'
 
@@ -27,12 +27,11 @@ export function AttendancePage() {
   const { upcoming } = useServices()
   const [period, setPeriod] = useState<Period>('90')
   const [member, setMember] = useState<Id | null>(null)
-  const today = todayString()
 
   const stats = useMemo(() => {
     const from = period === 'tudo' ? null : toLocalDateString(addDays(new Date(), -Number(period)))
-    return memberStats(services, attendance, { today, from })
-  }, [services, attendance, period, today])
+    return memberStats(services, attendance, { from })
+  }, [services, attendance, period])
 
   const rows = useMemo(
     () =>
@@ -42,20 +41,25 @@ export function AttendancePage() {
     [profiles, stats],
   )
 
+  // Do horário de início em diante o evento já aconteceu: sai dos "próximos" e entra no histórico.
+  const started = (a: Attendance) => !!servicesById[a.serviceId] && hasStarted(servicesById[a.serviceId])
+  const byDate = (a: Attendance, b: Attendance) => servicesById[a.serviceId].date.localeCompare(servicesById[b.serviceId].date)
   // Ausências já avisadas para os próximos cultos (o líder reorganiza a escala).
-  const upcomingAbsences = attendance
-    .filter((a) => a.status === 'ausente' && servicesById[a.serviceId] && servicesById[a.serviceId].date >= today)
-    .sort((a, b) => servicesById[a.serviceId].date.localeCompare(servicesById[b.serviceId].date))
+  const upcomingAbsences = attendance.filter((a) => a.status === 'ausente' && servicesById[a.serviceId] && !started(a)).sort(byDate)
   const recentAbsences = attendance
-    .filter((a) => a.status === 'ausente' && servicesById[a.serviceId] && servicesById[a.serviceId].date < today)
-    .sort((a, b) => servicesById[b.serviceId].date.localeCompare(servicesById[a.serviceId].date))
+    .filter((a) => a.status === 'ausente' && started(a))
+    .sort((a, b) => byDate(b, a))
+    .slice(0, 8)
+  const recentLates = attendance
+    .filter((a) => a.status === 'atrasado' && started(a))
+    .sort((a, b) => byDate(b, a))
     .slice(0, 8)
   const profileById = useTable('profiles')
-  const nextServices = upcoming.slice(0, 3)
+  const nextServices = upcoming.filter((s) => !hasStarted(s)).slice(0, 3)
 
   return (
     <Page className="max-w-3xl">
-      <PageHeader title="Presença" subtitle="Confirmações, faltas e justificativas da equipe" actions={<HeaderAvatar />} />
+      <PageHeader title="Presença" subtitle="Confirmações, faltas, atrasos e justificativas da equipe" actions={<HeaderAvatar />} />
 
       {nextServices.length > 0 && (
         <section>
@@ -158,6 +162,17 @@ export function AttendancePage() {
         </section>
       )}
 
+      {recentLates.length > 0 && (
+        <section className="mt-8">
+          <SectionTitle title="Atrasos recentes" />
+          <Card className="divide-y divide-line">
+            {recentLates.map((a) => (
+              <LateRow key={a.id} profile={profileById[a.userId]} service={servicesById[a.serviceId]} record={a} />
+            ))}
+          </Card>
+        </section>
+      )}
+
       {member && profileById[member] && <MemberHistorySheet profile={profileById[member]} onClose={() => setMember(null)} />}
     </Page>
   )
@@ -165,7 +180,8 @@ export function AttendancePage() {
 
 function summary(s: MemberStats | undefined): string {
   if (!s) return 'Sem cultos no período'
-  const parts = [plural(s.present, 'presença', 'presenças')]
+  // O atraso já está dentro das presenças: "3 presenças (1 com atraso)".
+  const parts = [`${plural(s.present, 'presença', 'presenças')}${s.late ? ` (${s.late} com atraso)` : ''}`]
   if (s.justified) parts.push(plural(s.justified, 'ausência justificada', 'ausências justificadas'))
   if (s.unjustified) parts.push(plural(s.unjustified, 'falta', 'faltas'))
   if (s.unmarked) parts.push(`${s.unmarked} sem registro`)
@@ -194,12 +210,32 @@ function AbsenceRow({ profile, serviceTitle, date, reason, note, to }: { profile
   )
 }
 
+function LateRow({ profile, service, record }: { profile?: Profile; service: Service; record: Attendance }) {
+  if (!profile) return null
+  const min = minutesLate(service, record)
+  return (
+    <Link to={`/cultos/${service.id}`} className="flex items-start gap-3 px-4 py-3 hover:bg-surface-2/60">
+      <Avatar profile={profile} size="md" />
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+          <span className="text-[14.5px] font-bold text-ink">{firstName(profile.name)}</span>
+          <span className="rounded-full bg-peach px-2.5 py-0.5 text-[12px] font-bold text-peach-ink">{min ? `${min} min de atraso` : 'Atrasado'}</span>
+        </div>
+        <div className="truncate text-[12.5px] text-muted">
+          {service.title} · {friendlyDate(service.date, { short: true })}
+          {record.arrivedAt ? ` · chegou às ${record.arrivedAt}` : ''}
+        </div>
+        {record.note && <p className="mt-1 text-[13.5px] leading-snug text-ink-2">“{record.note}”</p>}
+      </div>
+    </Link>
+  )
+}
+
 function MemberHistorySheet({ profile, onClose }: { profile: Profile; onClose: () => void }) {
   const services = useRows('services')
   const attendance = useTable('attendance')
-  const today = todayString()
   const history = services
-    .filter((s) => s.date < today && (s.team.some((t) => t.userId === profile.id) || attendance[attendanceId(s.id, profile.id)]))
+    .filter((s) => hasStarted(s) && (s.team.some((t) => t.userId === profile.id) || attendance[attendanceId(s.id, profile.id)]))
     .sort((a, b) => b.date.localeCompare(a.date))
   return (
     <Sheet open onClose={onClose} title={profile.name} description="Histórico de presença nos cultos que já aconteceram">
@@ -215,8 +251,9 @@ function MemberHistorySheet({ profile, onClose }: { profile: Profile; onClose: (
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-[14.5px] font-bold text-ink">{s.title}</div>
                   {r?.status === 'ausente' && isJustified(r) && <div className="truncate text-[12.5px] text-muted">{r.note || ABSENCE_REASON_BY_ID[r.reason ?? '']?.name}</div>}
+                  {r?.status === 'atrasado' && lateDetail(r) && <div className="truncate text-[12.5px] text-muted">{lateDetail(r)}</div>}
                 </div>
-                <AttendancePill record={r} past />
+                <AttendancePill record={r} past service={s} />
               </Link>
             )
           })}

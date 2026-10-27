@@ -151,10 +151,10 @@ export interface Message {
 }
 
 /**
- * Presença num culto/ensaio. Antes do dia o membro confirma ou avisa a ausência (com
- * justificativa); no dia o líder marca quem esteve presente.
+ * Presença num culto/ensaio. Antes do evento o membro confirma ou avisa a ausência (com
+ * justificativa); a partir do dia o líder marca quem esteve presente e quem chegou atrasado.
  */
-export type AttendanceStatus = 'confirmado' | 'presente' | 'ausente'
+export type AttendanceStatus = 'confirmado' | 'presente' | 'atrasado' | 'ausente'
 
 export interface Attendance {
   /** `${serviceId}:${userId}` — uma linha por membro em cada culto. */
@@ -164,8 +164,10 @@ export interface Attendance {
   status: AttendanceStatus
   /** Motivo da ausência (ids de ABSENCE_REASONS). */
   reason: string | null
-  /** Justificativa escrita. */
+  /** Justificativa escrita (da ausência ou do atraso). */
   note: string
+  /** HH:mm em que chegou, quando atrasado. Registros de antes da migração v7 não têm. */
+  arrivedAt?: string | null
   markedBy: Id | null
   createdAt: string
   updatedAt: string

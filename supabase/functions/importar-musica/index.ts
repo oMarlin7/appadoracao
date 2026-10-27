@@ -335,6 +335,7 @@ async function deepseek<T>(path: string, body: unknown, key: string, ms: number)
 
 interface ChatResponse {
   choices?: Array<{ finish_reason?: string; message?: { content?: string | null } }>
+  usage?: { prompt_tokens?: number; completion_tokens?: number; prompt_cache_hit_tokens?: number }
 }
 
 /** Uma resposta em JSON do modelo, sem o modo de raciocínio (ligado por padrão e cobrado como saída). */
@@ -355,6 +356,8 @@ async function askJson<T>(system: string, user: string, key: string, ms: number)
     ms,
   )
   const choice = r.choices?.[0]
+  // Para acompanhar o custo nos registros da função.
+  console.log(`[ia] tokens: entrada ${r.usage?.prompt_tokens ?? '?'} (cache ${r.usage?.prompt_cache_hit_tokens ?? 0}), saída ${r.usage?.completion_tokens ?? '?'} — ${choice?.finish_reason ?? 'sem resposta'}`)
   if (choice?.finish_reason === 'content_filter') throw new AIError('recusado')
   const text = choice?.message?.content?.trim()
   if (choice?.finish_reason !== 'stop' || !text) throw new AIError('sem-resposta')
@@ -389,11 +392,14 @@ async function webSearch(query: string, key: string, count: number): Promise<Web
   }
 }
 
-/** As buscas da ficha, ao mesmo tempo, sem repetir páginas. */
+/**
+ * As buscas da ficha, ao mesmo tempo, sem repetir páginas. Não há busca só do Spotify: a busca da
+ * DeepSeek não traz as páginas das faixas (só as de busca e de artista); se alguma aparecer nos
+ * outros resultados, o modelo ainda pode citá-la.
+ */
 async function searchSong(song: { title: string; artist: string }, wantVideo: boolean, key: string): Promise<WebResult[]> {
   const q = `${song.title} ${song.artist}`.trim()
   const lists = await Promise.all([
-    webSearch(`${q} site:open.spotify.com`, key, 4),
     webSearch(`${q} bpm tom compasso`, key, 6),
     webSearch(`"${song.title}" ${song.artist} história significado da música lang:pt`, key, 6),
     webSearch(`"${song.title}" ${song.artist} como tocar arranjo lang:pt`, key, 5),
@@ -406,6 +412,7 @@ async function searchSong(song: { title: string; artist: string }, wantVideo: bo
     seen.add(r.url)
     out.push(r)
   }
+  console.log(`[ficha] busca na web: ${lists.map((l) => l.length).join(' + ')} resultados, ${Math.min(out.length, 24)} páginas`)
   return out.slice(0, 24)
 }
 
@@ -603,7 +610,8 @@ async function complete(input: CompleteInput) {
     meaning: typeof f.meaning === 'string' ? clean(f.meaning) : '',
     bibleRefs: texts(f.bibleRefs).filter(isBibleRef).slice(0, 4),
     arrangementNotes: arrangement.join('\n'),
-    sources: [...cited, ...results.filter((r) => !cited.has(r))].slice(0, 8).map((r) => ({ url: r.url, title: r.title })),
+    // Só as páginas de onde veio algum dado (o resto da busca não entrou na ficha).
+    sources: [...cited].slice(0, 8).map((r) => ({ url: r.url, title: r.title })),
   }
 }
 

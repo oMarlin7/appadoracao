@@ -19,7 +19,7 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 **Cadastro pelo nome (o jeito principal de cadastrar)**
 1. **Digite a música e o artista** (ex.: *galileu fernandinho*): aparecem os **vídeos do YouTube**, com o nome certo da música e do artista (mesmo quando o vídeo vem como "Música - Artista"), versão (*Ao Vivo*, *Playback*…) e duração. O catálogo do Deezer só entra no lugar se o YouTube não responder.
 2. **Toque na imagem** para **ouvir um trecho de 30 segundos** ali mesmo, sem abrir o vídeo, e confirmar que é a música certa.
-3. **Toque no vídeo certo** e o app monta a ficha sozinho, com esse vídeo guardado na música: capa, **tom original e BPM**, ritmo, **temas e momentos do culto** e um rascunho do **significado**, tirados da própria cifra e do catálogo. Com a chave da IA (opcional, paga) o app também pesquisa na web: Spotify, compasso, **significado**, **referências bíblicas** e, quando alguma página descreve a gravação, **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina), sempre com as fontes consultadas. O que nenhuma fonte confirma fica em branco.
+3. **Toque no vídeo certo** e o app monta a ficha sozinho, com esse vídeo guardado na música: capa, **tom original e BPM**, ritmo, **temas e momentos do culto** e um rascunho do **significado**, tirados da própria cifra e do catálogo. Com a chave da IA (opcional, paga) o app também pesquisa na web: compasso, **significado**, **referências bíblicas** e, quando alguma página descreve a gravação, **notas de arranjo** (como começa, quando a banda entra, o que repete, como termina), sempre com as fontes consultadas. O que nenhuma fonte confirma fica em branco.
 4. **Cifra e letra entram sozinhas**: o app acha a página da música pela busca do próprio Cifra Club e importa o texto com cada acorde em cima da sílaba certa, mostrando a fonte. Se o site demorar, toque em **Buscar de novo**.
 5. Confira e salve. Tudo continua editável, e o **BPM no toque** fica à mão para ajustar o andamento.
 - Também dá para **colar um link** do YouTube/Spotify, cadastrar **vários links de uma vez** (a cifra de cada uma entra sozinha; as que não forem encontradas ficam com a etiqueta *sem-cifra*) ou **preencher à mão**.
@@ -41,8 +41,9 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 
 **Presença**
 - Cada membro **confirma** que vai ou **avisa a ausência com justificativa** (trabalho, saúde, viagem, família, estudos ou outro motivo + texto).
-- No dia, o líder (ou quem ministra) marca **presente/ausente** — com “todos presentes” em um toque.
-- Tela **Presença**: ausências avisadas para os próximos cultos, **frequência** de cada membro (30/90 dias ou tudo) e histórico com as justificativas.
+- No dia, o líder (ou quem ministra) marca **presente, atrasado ou ausente** — com “todos presentes” em um toque. No atraso fica o horário de chegada (e quantos minutos depois do início) e uma observação.
+- Do **horário de início** em diante o evento já está acontecendo: some o “vou / não vou”, e presença, atraso e falta passam a contar como o que aconteceu (entram na frequência na hora).
+- Tela **Presença**: ausências avisadas para os próximos cultos, **frequência** de cada membro (30/90 dias ou tudo, com os atrasos), ausências e atrasos recentes e o histórico com as justificativas.
 
 **Votação das músicas (como a enquete do WhatsApp, só que organizada)**
 - O líder escolhe em **Equipe → Escolha das músicas**: *Líder escolhe* ou *Votação semanal*.
@@ -90,14 +91,14 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 
 ### 1. Criar o banco no Supabase
 1. Crie uma conta em supabase.com → **New project** (região *South America (São Paulo)*).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) depois com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase) e, por último, com [`supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql`](supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql) (salvar o próprio perfil, votação com qualquer número de músicas, encerrar na hora e notificações excluídas). Para as notificações no celular, rode também [`…_v6_notificacoes.sql`](supabase/migrations/20261021000000_v6_notificacoes.sql) e [`…_v6_agendador.sql`](supabase/migrations/20261021000100_v6_agendador.sql) (veja *Notificações no celular* abaixo).
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) depois com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase) e, por último, com [`supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql`](supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql) (salvar o próprio perfil, votação com qualquer número de músicas, encerrar na hora e notificações excluídas). Para as notificações no celular, rode também [`…_v6_notificacoes.sql`](supabase/migrations/20261021000000_v6_notificacoes.sql) e [`…_v6_agendador.sql`](supabase/migrations/20261021000100_v6_agendador.sql) (veja *Notificações no celular* abaixo). Para registrar atrasos na presença, rode [`…_v7_atrasos.sql`](supabase/migrations/20261027000000_v7_atrasos.sql).
 3. Em **Project Settings → API Keys**, copie a **Project URL** e a chave **publishable** (`sb_publishable_…`). Ela é pública: pode ir para o navegador sem problema, quem protege os dados são as regras do banco. (A chave *anon* antiga também funciona, mas o Supabase vai desligá-la no fim de 2026.)
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
 5. Em **Authentication → Sign In / Providers → Email**, desligue *Confirm email*. Sem um servidor de e-mail próprio (SMTP), o Supabase só entrega e-mails para quem é da organização no painel do Supabase, então a confirmação não chegaria aos membros. O código de convite continua protegendo o cadastro. Se um dia quiser confirmação de e-mail e "esqueci minha senha" funcionando para todos, configure um SMTP (ex.: [Resend](https://resend.com/docs/send-with-supabase-smtp), que tem plano gratuito) em **Authentication → Emails → SMTP Settings**.
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
 
-> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql`, `…_v4_seguranca.sql`, `…_v5_perfil_votacao_avisos.sql` e/ou os dois `…_v6_…`). Até lá o app continua funcionando, mas sem as funções novas.
+> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql`, `…_v4_seguranca.sql`, `…_v5_perfil_votacao_avisos.sql`, os dois `…_v6_…` e/ou `…_v7_atrasos.sql`). Até lá o app continua funcionando, mas sem as funções novas.
 
 ### 2. Publicar o app
 **Vercel**: *Add New → Project* → importe este repositório → em *Environment Variables* adicione:
@@ -114,7 +115,7 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_...
 Para rodar no seu computador conectado ao banco, copie `.env.example` para `.env.local` e preencha as mesmas variáveis. (`npm run dev` continua em modo demonstração sem o `.env.local`; `npm run build` usa o `.env.production`.)
 
 ### Busca pelo nome, cifra e ficha automática (função do servidor; chave da IA opcional)
-A função `importar-musica` faz a busca pelo nome, traz os dados dos links, importa a cifra e monta a ficha. **Sem a chave da IA, tudo isso funciona de graça**: busca no YouTube com prévia de 30 s, nome certo da música, cifra e letra, capa, BPM do catálogo, tom pela cifra e temas e momentos pela letra. **A chave da IA ([DeepSeek](https://platform.deepseek.com)) é opcional e paga**: com ela, o app também pesquisa a música na web e escreve o significado e as referências bíblicas, e acha o Spotify, o BPM e o compasso da gravação.
+A função `importar-musica` faz a busca pelo nome, traz os dados dos links, importa a cifra e monta a ficha. **Sem a chave da IA, tudo isso funciona de graça**: busca no YouTube com prévia de 30 s, nome certo da música, cifra e letra, capa, BPM do catálogo, tom pela cifra e temas e momentos pela letra. **A chave da IA ([DeepSeek](https://platform.deepseek.com)) é opcional e paga**: com ela, o app também pesquisa a música na web e escreve o significado e as referências bíblicas, e acha o BPM e o compasso da gravação. O link do Spotify só vem quando a busca encontra a página da faixa (a busca da DeepSeek quase nunca traz); se faltar, cole o link na ficha.
 
 - **Nada é inventado**: dado da gravação (Spotify, tom, BPM, compasso, arranjo) só entra se veio de uma página encontrada na busca, que aparece em *Fontes consultadas*. **Notas de arranjo** só quando uma fonte descreve como a gravação é tocada; sem isso, o campo fica vazio (o app não sugere arranjo). Referências bíblicas com livro ou capítulo que não existem ficam de fora.
 - O tom que vale é o da cifra importada (é nele que a equipe toca).
@@ -122,7 +123,7 @@ A função `importar-musica` faz a busca pelo nome, traz os dados dos links, imp
 1. Crie a conta em [platform.deepseek.com](https://platform.deepseek.com), coloque crédito em *Top up* (o uso é descontado do saldo) e crie a chave em *API Keys*.
 2. No painel do Supabase: **Edge Functions → Secrets → Add new secret**, nome `DEEPSEEK_API_KEY`, valor = a chave.
 
-**Custo**: só com a chave, e só quando alguém cadastra uma música pelo nome — cerca de US$ 0,01 por música (4 ou 5 buscas na web a US$ 0,75 por mil, mais o modelo `deepseek-flash` com o modo de raciocínio desligado, o jeito mais barato de usar a DeepSeek; ele custa metade fora do horário de pico; no Brasil o pico cai de madrugada). Sem saldo, o app avisa e continua com a ficha gratuita. Os dados enviados (nome, artista e letra da música) são processados pela DeepSeek, em servidores na China.
+**Custo**: só com a chave, e só quando alguém cadastra uma música pelo nome — cerca de US$ 0,005 por música, medido numa ficha de verdade (3 ou 4 buscas na web a US$ 0,75 por mil, mais o modelo `deepseek-flash` com o modo de raciocínio desligado, o jeito mais barato de usar a DeepSeek; ele custa metade fora do horário de pico; no Brasil o pico cai de madrugada). Sem saldo, o app avisa e continua com a ficha gratuita. Os dados enviados (nome, artista e letra da música) são processados pela DeepSeek, em servidores na China.
 
 Para publicar a função num projeto novo, com a [CLI do Supabase](https://supabase.com/docs/guides/cli) instalada:
 
@@ -236,7 +237,7 @@ src/
   components/      componentes visuais (cifra, capas, sheets, layout…)
   data/            músicas iniciais e equipe de demonstração
 public/push-sw.js     recebe e mostra as notificações (carregado pelo service worker)
-supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2 a v6)
+supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2 a v7)
 supabase/functions/   importar-musica (busca pelo nome, links e ficha com IA) e notificar (regras e envio das notificações)
 ```
 
