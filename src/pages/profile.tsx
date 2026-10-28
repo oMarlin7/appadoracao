@@ -24,6 +24,7 @@ import {
   RotateCcw,
   Save,
   Settings,
+  Sparkles,
   Share2,
   Sun,
   SunMoon,
@@ -33,6 +34,7 @@ import {
   Vote,
 } from 'lucide-react'
 import { Avatar } from '@/components/avatar'
+import { showWhatsNew } from '@/components/whats-new'
 import { HeaderAvatar, Page, PageHeader } from '@/components/layout'
 import { Button } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
@@ -202,6 +204,11 @@ export function ProfilePage() {
             <ChevronRight className="size-4 text-muted" />
           </Link>
         ))}
+        <button type="button" onClick={showWhatsNew} className="flex w-full items-center gap-3 px-5 py-4 text-left text-[15px] font-semibold text-ink hover:bg-surface-2/60">
+          <Sparkles className="size-5 text-muted" />
+          <span className="flex-1">Novidades do app</span>
+          <ChevronRight className="size-4 text-muted" />
+        </button>
         <button type="button" onClick={() => void signOut()} className="flex w-full items-center gap-3 px-5 py-4 text-left text-[15px] font-semibold text-rose-ink hover:bg-rose/50">
           <LogOut className="size-5" />
           Sair da conta

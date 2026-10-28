@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
+import { isMedley, medleyDoc, medleyParts } from './medley'
 import { detectKeyFromText } from './music/analyze'
 import { docChords, parseSheet, transposeDoc } from './music/sheet'
 import { makeSpeller, mod12, semitonesBetween, transposeKey } from './music/theory'
 import { useMyPref } from './hooks'
-import { useMe, useSettings } from './store'
+import { useMe, useSettings, useTable } from './store'
 import { ROLE_BY_ID } from './taxonomy'
 import type { Song } from '@/types'
 
@@ -13,10 +14,13 @@ export type KeySource = 'culto' | 'meu' | 'equipe' | 'original' | 'alterado'
 export function useSongSheet(song: Song | undefined, opts: { serviceKey?: string | null } = {}) {
   const pref = useMyPref(song?.id)
   const accidentals = useSettings((s) => s.accidentals)
-  const parsed = useMemo(() => parseSheet(song?.content ?? ''), [song?.content])
+  const songs = useTable('songs')
+  // Medley: a cifra vem das partes (cada uma no tom da equipe), uma depois da outra.
+  const medley = useMemo(() => (song && isMedley(song) ? medleyDoc(medleyParts(song, songs)) : null), [song, songs])
+  const parsed = useMemo(() => medley?.doc ?? parseSheet(song?.content ?? ''), [medley, song?.content])
   const hasChords = useMemo(() => docChords(parsed).length > 0, [parsed])
-  const detected = useMemo(() => (song && !song.originalKey && hasChords ? detectKeyFromText(song.content) : null), [song, hasChords])
-  const baseKey = song?.originalKey ?? detected ?? null
+  const detected = useMemo(() => (song && !medley && !song.originalKey && hasChords ? detectKeyFromText(song.content) : null), [song, medley, hasChords])
+  const baseKey = medley ? medley.baseKey : (song?.originalKey ?? detected ?? null)
   const preferredKey = opts.serviceKey ?? pref?.key ?? song?.teamKey ?? baseKey
 
   const [displayKey, setDisplayKey] = useState<string | null>(preferredKey)
@@ -32,10 +36,13 @@ export function useSongSheet(song: Song | undefined, opts: { serviceKey?: string
   const doc = useMemo(() => {
     if (!baseKey || !displayKey) return parsed
     const shift = semitonesBetween(baseKey, displayKey) - capo
-    if (mod12(shift) === 0 && accidentals === 'auto') return parsed
     const shapeKey = capo ? transposeKey(displayKey, -capo) : displayKey
-    return transposeDoc(parsed, shift, makeSpeller(shapeKey, accidentals))
-  }, [parsed, baseKey, displayKey, capo, accidentals])
+    const out = mod12(shift) === 0 && accidentals === 'auto' ? parsed : transposeDoc(parsed, shift, makeSpeller(shapeKey, accidentals))
+    // O tom de cada parte do medley acompanha a transposição (o que soa, sem o capotraste).
+    const sounding = semitonesBetween(baseKey, displayKey)
+    if (!medley || !sounding) return out
+    return { ...out, sections: out.sections.map((s) => (s.part?.key ? { ...s, part: { ...s.part, key: transposeKey(s.part.key, sounding, accidentals) } } : s)) }
+  }, [parsed, baseKey, displayKey, capo, accidentals, medley])
 
   let source: KeySource = 'alterado'
   if (displayKey && opts.serviceKey && displayKey === opts.serviceKey) source = 'culto'
@@ -45,7 +52,7 @@ export function useSongSheet(song: Song | undefined, opts: { serviceKey?: string
 
   const shapeKey = displayKey && capo ? transposeKey(displayKey, -capo) : displayKey
 
-  return { doc, parsed, baseKey, displayKey, setDisplayKey, capo, setCapo, pref, hasChords, source, shapeKey, detected }
+  return { doc, parsed, baseKey, displayKey, setDisplayKey, capo, setCapo, pref, hasChords, source, shapeKey, detected, isMedley: !!medley }
 }
 
 export const KEY_SOURCE_LABEL: Record<KeySource, string> = {

@@ -2,11 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router'
 import { Reorder, useDragControls } from 'motion/react'
 import { toast } from 'sonner'
-import { Copy, GripVertical, ListMusic, Lock, Pencil, Play, Plus, Trash2, Users, X } from 'lucide-react'
+import { Copy, GripVertical, Layers, ListMusic, Lock, Pencil, Play, Plus, Trash2, Users, X } from 'lucide-react'
 import { NewPlaylistForm, SongPickerSheet } from '@/components/action-sheets'
 import { Avatar } from '@/components/avatar'
 import { HeaderAvatar, Page, PageHeader, TopBar } from '@/components/layout'
-import { KeyBadge, SongCover } from '@/components/song-bits'
+import { KeyBadge, SongCover, songSubtitle } from '@/components/song-bits'
 import { Button, IconButton, LinkButton } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
 import { Card, EmptyState, Field, Input, Segmented, Switch } from '@/components/ui/primitives'
@@ -156,7 +156,7 @@ function PlaylistRow({ song, index, playlistId, canEdit, onDragEnd }: { song: So
         <SongCover song={song} size={46} />
         <div className="min-w-0">
           <div className="truncate text-[15px] font-bold text-ink">{song.title}</div>
-          <div className="truncate text-[13px] text-muted">{song.artist}</div>
+          <div className="truncate text-[13px] text-muted">{songSubtitle(song, { themes: false })}</div>
         </div>
       </Link>
       <KeyBadge value={song.teamKey ?? song.originalKey} kind={song.teamKey ? 'team' : 'original'} />
@@ -241,7 +241,7 @@ function PlaylistView({ playlist }: { playlist: Playlist }) {
   const canEdit = playlist.ownerId === me?.id || me?.role === 'admin'
   const [order, setOrder] = useState(playlist.songIds)
   useEffect(() => setOrder(playlist.songIds), [playlist.songIds])
-  const [sheet, setSheet] = useState<null | 'add' | 'edit'>(null)
+  const [sheet, setSheet] = useState<null | 'add' | 'medley' | 'edit'>(null)
   const list = order.filter((sid) => songs[sid])
 
   return (
@@ -294,22 +294,43 @@ function PlaylistView({ playlist }: { playlist: Playlist }) {
           </div>
         </div>
 
-        <div className="mt-6 flex justify-center gap-2 sm:justify-start">
+        <div className="mt-6 flex flex-wrap justify-center gap-2 sm:justify-start">
           {list.length > 0 && (
             <LinkButton to={`/playlists/${playlist.id}/tocar`} icon={Play}>
               Tocar em sequência
             </LinkButton>
           )}
           {canEdit && (
-            <Button variant="soft" icon={Plus} onClick={() => setSheet('add')}>
-              Adicionar
-            </Button>
+            <>
+              <Button variant="soft" icon={Plus} onClick={() => setSheet('add')}>
+                Adicionar
+              </Button>
+              <Button variant="outline" icon={Layers} onClick={() => setSheet('medley')}>
+                Medley
+              </Button>
+            </>
           )}
         </div>
 
         <div className="mt-6">
           {list.length === 0 ? (
-            <EmptyState icon={ListMusic} title="Playlist vazia" action={canEdit && <Button icon={Plus} onClick={() => setSheet('add')}>Adicionar músicas</Button>} />
+            <EmptyState
+              icon={ListMusic}
+              title="Playlist vazia"
+              description={canEdit ? 'Adicione músicas uma a uma ou junte várias num medley.' : undefined}
+              action={
+                canEdit && (
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button icon={Plus} onClick={() => setSheet('add')}>
+                      Adicionar músicas
+                    </Button>
+                    <Button variant="outline" icon={Layers} onClick={() => setSheet('medley')}>
+                      Montar medley
+                    </Button>
+                  </div>
+                )
+              }
+            />
           ) : (
             <Card className="p-1.5">
               <Reorder.Group axis="y" values={order} onReorder={setOrder} className="space-y-0.5">
@@ -331,12 +352,15 @@ function PlaylistView({ playlist }: { playlist: Playlist }) {
         </div>
       </Page>
       <SongPickerSheet
-        open={sheet === 'add'}
+        open={sheet === 'add' || sheet === 'medley'}
         onClose={() => setSheet(null)}
         title="Adicionar à playlist"
         excludeIds={playlist.songIds}
+        medley
+        startWithMedley={sheet === 'medley'}
         onPick={async (song) => {
           if (await addToPlaylist(playlist.id, song.id)) toast.success(`“${song.title}” adicionada`)
+          if (sheet === 'medley') setSheet(null)
         }}
       />
       <EditPlaylistSheet playlist={playlist} open={sheet === 'edit'} onClose={() => setSheet(null)} />

@@ -2,6 +2,7 @@ import { addDays, toLocalDateString } from '@/lib/utils'
 import { TABLES, type Announcement, type Attendance, type CustomTheme, type DataSnapshot, type Favorite, type Message, type Playlist, type Profile, type Reaction, type Recording, type Service, type SongPoll, type Vote, type Song, type SongPref, type Suggestion } from '@/types'
 import { zonedTime } from '@/lib/voting'
 import { buildSeedSongs } from './songs'
+import { medleyArtist, medleyTitle, partKey } from '@/lib/medley'
 
 /**
  * Dados do modo demonstração: uma equipe fictícia de 8 pessoas com cultos, escala,
@@ -43,6 +44,29 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
   const songs: Song[] = buildSeedSongs(now.getTime())
   for (const s of songs) out.songs[s.id] = { ...s, createdBy: 'demo-ana' }
   const key = (id: string) => out.songs[id].teamKey ?? out.songs[id].originalKey
+
+  // Um medley de exemplo: a cifra vem das duas músicas, uma depois da outra.
+  const medley = ['ex-celebrai', 'ex-ele-vive'].map((id) => out.songs[id])
+  out.songs['medley-abertura'] = {
+    ...medley[0],
+    id: 'medley-abertura',
+    title: medleyTitle(medley),
+    artist: medleyArtist(medley),
+    medleyIds: medley.map((p) => p.id),
+    originalKey: partKey(medley[0]),
+    teamKey: null,
+    bpm: null,
+    timeSignature: null,
+    themes: [...new Set(medley.flatMap((p) => p.themes))],
+    moments: [...new Set(medley.flatMap((p) => p.moments))],
+    tags: [],
+    meaning: '',
+    bibleRefs: [],
+    content: '',
+    notes: '',
+    youtubeUrl: null,
+    spotifyUrl: null,
+  }
 
   out.team_settings.team = {
     id: 'team',
@@ -308,7 +332,7 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
   // ---- Playlists ----------------------------------------------------------------
   const playlists: Playlist[] = [
     { id: 'pl-ceia', name: 'Santa Ceia', description: 'Músicas para o momento da ceia.', color: 'rose', ownerId: 'demo-lucas', isShared: true, songIds: ['ex-no-calvario', 'ex-graca-sem-fim', 'ex-amor-de-pai', 'hino-santo-santo-santo'], createdAt: created, updatedAt: created },
-    { id: 'pl-abertura', name: 'Pra abrir o culto', description: 'Animadas, conhecidas e fáceis de cantar.', color: 'butter', ownerId: 'demo-ana', isShared: true, songIds: ['ex-celebrai', 'ex-ele-vive', 'ex-vitoria', 'ex-ide'], createdAt: created, updatedAt: created },
+    { id: 'pl-abertura', name: 'Pra abrir o culto', description: 'Animadas, conhecidas e fáceis de cantar.', color: 'butter', ownerId: 'demo-ana', isShared: true, songIds: ['medley-abertura', 'ex-vitoria', 'ex-ide'], createdAt: created, updatedAt: created },
     { id: 'pl-natal', name: 'Cantata de Natal', description: 'Repertório para dezembro.', color: 'mint', ownerId: 'demo-mariana', isShared: true, songIds: ['ex-noite-santa', 'hino-doxologia'], createdAt: created, updatedAt: created },
     { id: 'pl-devocional', name: 'Meu devocional', description: 'Para ouvir e orar durante a semana.', color: 'lavender', ownerId: 'demo-ana', isShared: false, songIds: ['ex-amanhecer', 'ex-fonte-de-cura', 'ex-santo-es-tu'], createdAt: created, updatedAt: created },
   ]

@@ -1,5 +1,6 @@
 import { toast } from 'sonner'
 import { backend, isNetworkError } from './backend'
+import { findMedley, isMedley, medleyArtist, medleyTitle, partKey } from './medley'
 import { normalizeKeyName } from './music/theory'
 import { currentUserId, getData, useData } from './store'
 import { enqueue, flushOutbox, refresh } from './sync'
@@ -184,7 +185,52 @@ export async function deleteSong(id: Id): Promise<boolean> {
       cascade('suggestions', s.id)
       for (const r of Object.values(data.reactions)) if (r.targetId === s.id) cascade('reactions', r.id)
     }
+  // A música sai dos medleys em que estava (o medley continua com as outras).
+  for (const m of Object.values(data.songs))
+    if (m.medleyIds?.includes(id)) void save('songs', { ...m, medleyIds: m.medleyIds.filter((x) => x !== id), updatedAt: nowIso() })
   return true
+}
+
+/** Temas, momentos, capa e tom do medley, tirados das partes. */
+function medleyFields(parts: Song[]): Partial<Song> {
+  return {
+    artist: medleyArtist(parts),
+    medleyIds: parts.map((p) => p.id),
+    originalKey: partKey(parts[0]),
+    tempo: parts[0].tempo,
+    themes: [...new Set(parts.flatMap((p) => p.themes))].slice(0, 6),
+    moments: [...new Set(parts.flatMap((p) => p.moments))],
+    coverUrl: parts.find((p) => p.coverUrl)?.coverUrl ?? null,
+  }
+}
+
+function medleyPartsOf(ids: Id[]): Song[] | null {
+  const songs = getData().songs
+  const parts = [...new Set(ids)].map((id) => songs[id]).filter((s): s is Song => !!s && !isMedley(s))
+  if (parts.length >= 2) return parts
+  toast.error('Escolha pelo menos duas músicas para o medley')
+  return null
+}
+
+/**
+ * Junta duas ou mais músicas num medley (uma música só). Se a equipe já tem um medley com as
+ * mesmas músicas na mesma ordem, usa ele.
+ */
+export async function createMedley(ids: Id[], name = ''): Promise<Song | null> {
+  const parts = medleyPartsOf(ids)
+  if (!parts) return null
+  const title = name.trim() || medleyTitle(parts)
+  const existing = findMedley(Object.values(getData().songs), parts.map((p) => p.id))
+  if (existing && (!name.trim() || existing.title === title)) return existing
+  const song = newSong({ title, ...medleyFields(parts) })
+  return (await saveSong(song)) ? song : null
+}
+
+export async function updateMedley(id: Id, ids: Id[], name = ''): Promise<boolean> {
+  const song = getData().songs[id]
+  const parts = medleyPartsOf(ids)
+  if (!song || !parts) return false
+  return saveSong({ ...song, ...medleyFields(parts), title: name.trim() || medleyTitle(parts) })
 }
 
 export async function setTeamKey(songId: Id, key: string | null): Promise<boolean> {

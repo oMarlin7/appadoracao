@@ -31,7 +31,7 @@ import { SongPickerSheet } from '@/components/action-sheets'
 import { Avatar, AvatarStack } from '@/components/avatar'
 import { KeyGrid } from '@/components/key-picker'
 import { HeaderAvatar, Page, PageHeader, TopBar } from '@/components/layout'
-import { KeyBadge, MomentPill, SongCover } from '@/components/song-bits'
+import { KeyBadge, MomentPill, SongCover, songSubtitle } from '@/components/song-bits'
 import { Button, IconButton, LinkButton } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
 import { Card, Chip, EmptyState, SectionTitle, Segmented, Textarea } from '@/components/ui/primitives'
@@ -282,7 +282,7 @@ function SetlistRow({
           <div className="mt-0.5 flex items-center gap-1.5">
             <MomentPill id={item.moment} />
             {item.notes && <span className="truncate text-[12.5px] text-muted">{item.notes}</span>}
-            {!item.moment && !item.notes && <span className="truncate text-[12.5px] text-muted">{song.artist}</span>}
+            {!item.moment && !item.notes && <span className="truncate text-[12.5px] text-muted">{songSubtitle(song, { themes: false })}</span>}
           </div>
         </div>
       </Link>
@@ -889,6 +889,7 @@ function ServiceView({ service }: { service: Service }) {
         title="Adicionar ao setlist"
         excludeIds={visible.map((i) => i.songId)}
         suggestions={pickerSuggestions}
+        medley
         onPick={async (song) => {
           setSheet(null)
           const rec = pickerSuggestions.find((p) => p.song.id === song.id)
@@ -900,6 +901,7 @@ function ServiceView({ service }: { service: Service }) {
         onClose={() => setSheet(null)}
         title="Sugerir música"
         excludeIds={visible.map((i) => i.songId)}
+        medley
         onPick={async (song) => {
           setSheet(null)
           if (await suggestSong(song.id, service.id, '')) toast.success(`“${song.title}” sugerida para a equipe 💡`)

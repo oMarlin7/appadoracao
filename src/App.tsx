@@ -229,8 +229,8 @@ function PwaUpdater() {
   } = useRegisterSW()
   useEffect(() => {
     if (!needRefresh) return
-    toast('Nova versão disponível', {
-      description: 'Atualize quando estiver fora do culto.',
+    toast('Nova versão disponível ✨', {
+      description: 'Toque em Atualizar pra ver as novidades (de preferência fora do culto 😉).',
       duration: Infinity,
       action: { label: 'Atualizar', onClick: () => void updateServiceWorker(true) },
     })

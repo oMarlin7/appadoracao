@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { hasStarted, memberStats, minutesLate } from './attendance'
 import { cleanChannelName, embedUrl, extractMediaLinks, parseMediaUrl, splitVideoTitle } from './media'
 import { THEMES, THEME_BY_ID, applyCustomThemes, groupThemes, suggestThemes } from './taxonomy'
+import { RELEASES, greetingFor, unseenReleases } from '@/data/changelog'
 import type { Attendance, CustomTheme, Service } from '@/types'
 
 describe('links de YouTube e Spotify', () => {
@@ -169,5 +170,35 @@ describe('temas', () => {
     expect(suggestThemes('Somos uma geração eleita, juventude que adora')).toContain('tema-x')
     applyCustomThemes([])
     expect(THEME_BY_ID['tema-x']).toBeUndefined()
+  })
+})
+
+describe('notas da atualização', () => {
+  const releases = [
+    { id: '2026-11-05', items: [] },
+    { id: '2026-10-28', items: [] },
+  ]
+
+  it('mostra só as versões que o aparelho ainda não mostrou', () => {
+    expect(unseenReleases('2026-10-28', releases).map((r) => r.id)).toEqual(['2026-11-05'])
+    expect(unseenReleases('2026-11-05', releases)).toEqual([])
+    expect(unseenReleases(null, releases)).toHaveLength(2)
+  })
+
+  it('chama a pessoa pelo primeiro nome', () => {
+    const g = greetingFor('Marlon de Paula', 'x')
+    expect(g).toContain('Marlon')
+    expect(g).not.toContain('{nome}')
+    expect(g).not.toContain('Paula')
+    // A mesma versão, para a mesma pessoa, tem sempre a mesma saudação.
+    expect(greetingFor('Marlon de Paula', 'x')).toBe(g)
+  })
+
+  it('cada novidade é curta e diz onde tocar com o botão em negrito', () => {
+    for (const r of RELEASES)
+      for (const item of r.items) {
+        expect(item.text.length, item.title).toBeLessThanOrEqual(220)
+        if (item.kind === 'novo') expect(item.text, item.title).toMatch(/\*\*[^*]+\*\*/)
+      }
   })
 })

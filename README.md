@@ -62,6 +62,8 @@ Repertório organizado por **tema, significado e momento do culto**, **cadastro 
 - Setlist (arraste para reordenar), observações por música, alerta de saltos de tom e **escala** (quem ministra, canta e toca).
 - **Só o líder coloca músicas no culto.** Os membros usam **Sugerir** (em cada música e em cada evento): a sugestão vai para a votação ou para o líder aceitar.
 - **Favoritas** e **playlists** (só suas ou compartilhadas com a equipe).
+- **Medley**: junte duas ou mais músicas, uma emendada na outra, e elas contam como **uma música só** no setlist, na votação e na playlist. Monte ao **sugerir** (em *Sugerir para o culto → Juntar com outra música*), na **playlist** (botão **Medley**) ou no setlist (*Música → Juntar músicas num medley*). A cifra do medley é a de cada música, na ordem, cada uma no tom da equipe e com o nome e o tom marcados onde ela começa; mudar o tom do medley move todas juntas. Corrigiu a cifra de uma das músicas? O medley já mostra corrigido. Na hora de escolher a próxima, o app mostra as que emendam bem no tom da última.
+- **Notas da atualização**: quando sai uma versão nova e a pessoa toca em **Atualizar**, a tela inteira mostra, chamando pelo nome, o que chegou ou foi corrigido e onde tocar para usar. Dá para rever em **Perfil → Novidades do app**.
 - **Chat** em tempo real com reações e compartilhamento de músicas e cultos.
 
 **Por baixo**
@@ -91,14 +93,14 @@ O app usa o [Supabase](https://supabase.com) (banco, login e tempo real — o pl
 
 ### 1. Criar o banco no Supabase
 1. Crie uma conta em supabase.com → **New project** (região *South America (São Paulo)*).
-2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) depois com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase) e, por último, com [`supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql`](supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql) (salvar o próprio perfil, votação com qualquer número de músicas, encerrar na hora e notificações excluídas). Para as notificações no celular, rode também [`…_v6_notificacoes.sql`](supabase/migrations/20261021000000_v6_notificacoes.sql) e [`…_v6_agendador.sql`](supabase/migrations/20261021000100_v6_agendador.sql) (veja *Notificações no celular* abaixo). Para registrar atrasos na presença, rode [`…_v7_atrasos.sql`](supabase/migrations/20261027000000_v7_atrasos.sql).
+2. Abra **SQL Editor → New query**, cole o conteúdo de [`supabase/migrations/20261016000000_init.sql`](supabase/migrations/20261016000000_init.sql) e clique em **Run**. Depois, numa nova query, faça o mesmo com [`supabase/migrations/20261017000000_v2_midia_presenca.sql`](supabase/migrations/20261017000000_v2_midia_presenca.sql) (fotos, capas, Spotify, presença, gravações e temas da equipe — também cria o espaço privado `ensaios` para os áudios) depois com [`supabase/migrations/20261018000000_v3_votacao_avisos.sql`](supabase/migrations/20261018000000_v3_votacao_avisos.sql) (tipos de evento, votação, avisos do líder e a regra de que só o líder mexe no setlist) depois com [`supabase/migrations/20261019000000_v4_seguranca.sql`](supabase/migrations/20261019000000_v4_seguranca.sql) (ajustes pedidos pelo *Security Advisor* do Supabase) e, por último, com [`supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql`](supabase/migrations/20261020000000_v5_perfil_votacao_avisos.sql) (salvar o próprio perfil, votação com qualquer número de músicas, encerrar na hora e notificações excluídas). Para as notificações no celular, rode também [`…_v6_notificacoes.sql`](supabase/migrations/20261021000000_v6_notificacoes.sql) e [`…_v6_agendador.sql`](supabase/migrations/20261021000100_v6_agendador.sql) (veja *Notificações no celular* abaixo). Para registrar atrasos na presença, rode [`…_v7_atrasos.sql`](supabase/migrations/20261027000000_v7_atrasos.sql). Para os medleys, rode [`…_v8_medley.sql`](supabase/migrations/20261028000000_v8_medley.sql).
 3. Em **Project Settings → API Keys**, copie a **Project URL** e a chave **publishable** (`sb_publishable_…`). Ela é pública: pode ir para o navegador sem problema, quem protege os dados são as regras do banco. (A chave *anon* antiga também funciona, mas o Supabase vai desligá-la no fim de 2026.)
 4. Em **Authentication → URL Configuration**, coloque em **Site URL** o endereço onde o app vai ficar (ex.: `https://adoracao-da-igreja.vercel.app`).
 5. Em **Authentication → Sign In / Providers → Email**, desligue *Confirm email*. Sem um servidor de e-mail próprio (SMTP), o Supabase só entrega e-mails para quem é da organização no painel do Supabase, então a confirmação não chegaria aos membros. O código de convite continua protegendo o cadastro. Se um dia quiser confirmação de e-mail e "esqueci minha senha" funcionando para todos, configure um SMTP (ex.: [Resend](https://resend.com/docs/send-with-supabase-smtp), que tem plano gratuito) em **Authentication → Emails → SMTP Settings**.
 
 > Projetos gratuitos do Supabase entram em pausa depois de uma semana sem uso. Com o ministério usando toda semana isso não acontece; se acontecer, é só clicar em *Restore* no painel.
 
-> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql`, `…_v4_seguranca.sql`, `…_v5_perfil_votacao_avisos.sql`, os dois `…_v6_…` e/ou `…_v7_atrasos.sql`). Até lá o app continua funcionando, mas sem as funções novas.
+> **Já tinha o app no ar?** Rode no SQL Editor só os arquivos que ainda não rodou (`…_v2_midia_presenca.sql`, `…_v3_votacao_avisos.sql`, `…_v4_seguranca.sql`, `…_v5_perfil_votacao_avisos.sql`, os dois `…_v6_…`, `…_v7_atrasos.sql` e/ou `…_v8_medley.sql`). Até lá o app continua funcionando, mas sem as funções novas.
 
 ### 2. Publicar o app
 **Vercel**: *Add New → Project* → importe este repositório → em *Environment Variables* adicione:
@@ -231,15 +233,18 @@ src/
   lib/attendance.ts cálculo de presença e frequência
   lib/events.ts    tipos de evento (apresentação × ensaio/reunião)
   lib/voting.ts    regra da votação (quinta 12h → sábado 12h), apuração e desempate
+  lib/medley.ts    medley: partes, nome automático e a cifra montada a partir das músicas
   lib/inbox.ts     painel "Para você": lembretes e avisos de cada membro
   lib/push.ts      notificações no celular: ativar no aparelho, preferências e teste
   pages/           telas
   components/      componentes visuais (cifra, capas, sheets, layout…)
-  data/            músicas iniciais e equipe de demonstração
+  data/            músicas iniciais, equipe de demonstração e notas da atualização (changelog.ts)
 public/push-sw.js     recebe e mostra as notificações (carregado pelo service worker)
-supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2 a v7)
+supabase/migrations/  esquema do banco com regras de segurança por linha (init, v2 a v8)
 supabase/functions/   importar-musica (busca pelo nome, links e ficha com IA) e notificar (regras e envio das notificações)
 ```
+
+**Notas da atualização**: a cada versão publicada com novidade ou correção, adicione uma entrada no começo de [`src/data/changelog.ts`](src/data/changelog.ts) (o `id` é a data da publicação). Cada item é curto e diz onde tocar, com o nome do botão entre `**` — ex.: *"Abra a playlist, toque em \*\*Medley\*\*…"*. Quem abrir a versão nova vê a tela de novidades uma vez em cada aparelho.
 
 **Segurança**: todo acesso passa pelas regras de segurança por linha do Postgres. Só membros logados veem dados; cada um altera o que é seu (perfil, favoritas, mensagens, playlists, preferências, notificações excluídas, a própria presença); as músicas e os cultos são colaborativos; excluir é do autor ou do líder; presença de outros membros só o líder ou quem ministra o culto marca; **só o líder coloca, tira ou reordena músicas do setlist e aceita sugestões** (o banco recusa de outros membros); cada um vota em até N músicas, só enquanto a votação está aberta, e só em músicas sugeridas; o resultado é aplicado por uma função do banco que confere prazo e votos; avisos direcionados só chegam a quem foi escolhido; os áudios de ensaio ficam num espaço privado (cada um envia na própria pasta e só a equipe logada ouve); ninguém se promove a líder sozinho e a equipe nunca fica sem líder; cada aparelho só recebe as notificações de quem está logado nele, e as chaves de envio ficam fora do alcance do app.
 

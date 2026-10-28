@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { ArrowRight, CalendarPlus, Info, Lightbulb, RotateCcw, SendHorizontal, SlidersHorizontal, Sparkles } from 'lucide-react'
 import { AddToServiceSheet, SuggestSheet } from '@/components/action-sheets'
 import { HeaderAvatar, Page } from '@/components/layout'
-import { KeyBadge, SongCover } from '@/components/song-bits'
+import { KeyBadge, SongCover, songSubtitle } from '@/components/song-bits'
 import { Button, IconButton } from '@/components/ui/button'
 import { Card, Chip, EmptyState, SectionTitle } from '@/components/ui/primitives'
 import { useDocumentTitle, useServices } from '@/lib/hooks'
@@ -269,7 +269,7 @@ export function AssistantPage() {
                           <SongCover song={r.song} size={50} />
                           <span className="min-w-0">
                             <span className="block truncate text-[15.5px] font-bold text-ink">{r.song.title}</span>
-                            <span className="block truncate text-[13px] text-muted">{r.song.artist}</span>
+                            <span className="block truncate text-[13px] text-muted">{songSubtitle(r.song, { themes: false })}</span>
                           </span>
                         </Link>
                         <KeyBadge value={r.key} kind={r.song.teamKey ? 'team' : 'original'} />

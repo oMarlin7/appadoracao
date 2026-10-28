@@ -45,7 +45,22 @@ export interface SheetSection {
   label: string | null
   type: SectionType
   lines: SheetLine[]
+  /** Num medley, a primeira seção de cada música traz qual música começa ali. */
+  part?: MedleyPart
 }
+
+export interface MedleyPart {
+  /** 1, 2, 3… */
+  index: number
+  songId: string
+  title: string
+  artist: string
+  /** Tom em que a parte soa (já com a transposição da tela). */
+  key: string | null
+}
+
+/** "2. Eu Me Rendo · Tom Dm" (para copiar e compartilhar). */
+export const medleyPartHeading = (p: MedleyPart) => `${p.index}. ${p.title}${p.key ? ` · Tom ${p.key}` : ''}`
 
 export interface SheetMeta {
   title?: string
@@ -421,6 +436,7 @@ export function docLyrics(doc: SheetDoc, opts: { labels?: boolean } = {}): strin
       .map((l) => lineText(l).replace(/\s{2,}/g, ' ').trim())
     while (lines.length && !lines[0]) lines.shift()
     while (lines.length && !lines[lines.length - 1]) lines.pop()
+    if (s.part && opts.labels) blocks.push(medleyPartHeading(s.part))
     if (!lines.length) continue
     blocks.push((opts.labels && s.label ? `[${s.label}]\n` : '') + lines.join('\n'))
   }
@@ -461,6 +477,7 @@ export function docToText(doc: SheetDoc): string {
   const out: string[] = []
   for (const s of doc.sections) {
     if (out.length) out.push('')
+    if (s.part) out.push(medleyPartHeading(s.part), '')
     const first = s.lines[0]
     if (s.label) {
       if (first?.kind === 'chords') {

@@ -1,3 +1,4 @@
+import { isMedley } from './medley'
 import { keyCompatibility, normalizeKeyName, prettyAccidentals } from './music/theory'
 import { scoreSong } from './search'
 import { MOMENTS, MOMENT_BY_ID, TEMPO_BY_ID, THEMES, THEME_BY_ID, normalizeForMatch, suggestThemes, type Tempo } from './taxonomy'
@@ -142,7 +143,7 @@ export function recommend(ctx: RecommendContext, q: RecommendQuery): Recommendat
       if (favs >= 2) reasons.push(`Favorita de ${favs} membros`)
     }
 
-    if (!song.content.trim()) score -= 2
+    if (!song.content.trim() && !isMedley(song)) score -= 2
 
     out.push({ song, score, reasons: dedupe(reasons), key })
   }

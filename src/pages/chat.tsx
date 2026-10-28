@@ -4,7 +4,7 @@ import { toast } from 'sonner'
 import { ArrowLeft, CalendarDays, Copy, MessageCircle, Music, Paperclip, SendHorizontal, SmilePlus, Trash2 } from 'lucide-react'
 import { SongPickerSheet } from '@/components/action-sheets'
 import { Avatar, AvatarStack } from '@/components/avatar'
-import { KeyBadge, SongCover } from '@/components/song-bits'
+import { KeyBadge, SongCover, songSubtitle } from '@/components/song-bits'
 import { IconButton } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/primitives'
 import { Sheet } from '@/components/ui/sheet'
@@ -30,7 +30,7 @@ function Attachment({ message, mine }: { message: Message; mine: boolean }) {
         <SongCover song={song} size={44} />
         <span className="min-w-0 flex-1">
           <span className="block truncate text-[14px] font-bold text-ink">{song.title}</span>
-          <span className="block truncate text-[12px] text-muted">{song.artist}</span>
+          <span className="block truncate text-[12px] text-muted">{songSubtitle(song, { themes: false })}</span>
         </span>
         <KeyBadge value={song.teamKey ?? song.originalKey} />
       </Link>

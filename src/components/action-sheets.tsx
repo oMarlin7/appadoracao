@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate } from 'react-router'
 import { toast } from 'sonner'
-import { CalendarPlus, Check, ListMusic, Lightbulb, Plus, Vote as VoteIcon } from 'lucide-react'
-import { addToPlaylist, addToService, createPlaylist, suggestSong } from '@/lib/actions'
+import { CalendarPlus, Check, Layers, ListMusic, Lightbulb, Plus, Vote as VoteIcon } from 'lucide-react'
+import { addToPlaylist, addToService, createMedley, createPlaylist, suggestSong } from '@/lib/actions'
 import { useServices, useSongs } from '@/lib/hooks'
+import { findMedley, isMedley } from '@/lib/medley'
 import { searchSongs } from '@/lib/search'
 import { isPresentation } from '@/lib/events'
 import { useRows, useSession, useTable } from '@/lib/store'
@@ -11,6 +12,7 @@ import { formatDeadline, votingActive, votingInfo } from '@/lib/voting'
 import { MOMENTS, PASTELS, type Pastel } from '@/lib/taxonomy'
 import { cn, friendlyDate, plural } from '@/lib/utils'
 import type { Id, Song } from '@/types'
+import { MedleyBuilder, StartMedleyButton } from './medley'
 import { KeyBadge, SongCover, SongRow } from './song-bits'
 import { Button } from './ui/button'
 import { Chip, EmptyState, Field, Input, SearchInput, Switch, Textarea } from './ui/primitives'
@@ -150,34 +152,69 @@ export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { son
   const best = withInfo.find((x) => x.info.phase === 'aberta') ?? withInfo.find((x) => x.info.phase === 'agendada') ?? withInfo[0]
   const [serviceId, setServiceId] = useState<Id | null | undefined>(undefined)
   const [note, setNote] = useState('')
+  /** Medley: as músicas que vão junto com esta (null = só esta música). */
+  const [medleyIds, setMedleyIds] = useState<Id[] | null>(null)
+  const [medleyName, setMedleyName] = useState('')
+  const [sending, setSending] = useState(false)
+  const allSongs = useRows('songs')
+  const song = useTable('songs')[songId]
   useEffect(() => {
-    if (open) setServiceId(preset)
+    if (!open) return
+    setServiceId(preset)
+    setMedleyIds(null)
+    setMedleyName('')
   }, [open, preset])
   const selected = serviceId === undefined ? (best?.s.id ?? null) : serviceId
   const selectedInfo = withInfo.find((x) => x.s.id === selected)?.info
-  const already = suggestions.some((g) => g.songId === songId && g.serviceId === selected && g.status === 'pendente')
+  const building = medleyIds !== null
+  const targetId = building ? findMedley(allSongs, medleyIds)?.id : songId
+  const already = !!targetId && suggestions.some((g) => g.songId === targetId && g.serviceId === selected && g.status === 'pendente')
 
   return (
     <Sheet
       open={open}
       onClose={onClose}
-      title="Sugerir música"
+      title={building ? 'Sugerir medley' : 'Sugerir música'}
       footer={
         <Button
           className="w-full"
-          icon={Lightbulb}
-          disabled={already}
+          icon={building ? Layers : Lightbulb}
+          disabled={already || (building && medleyIds.length < 2)}
+          loading={sending}
           onClick={async () => {
-            if (await suggestSong(songId, selected, note))
-              toast.success(selectedInfo?.phase === 'aberta' ? 'Sugestão na votação! Agora é só votar 🗳️' : 'Sugestão enviada para a equipe 💡')
+            setSending(true)
+            const m = building ? await createMedley(medleyIds, medleyName) : null
+            const ok = (!building || m) && (await suggestSong(m?.id ?? songId, selected, note))
+            setSending(false)
+            if (building && !m) return
+            if (ok) toast.success(selectedInfo?.phase === 'aberta' ? 'Sugestão na votação! Agora é só votar 🗳️' : 'Sugestão enviada para a equipe 💡')
             setNote('')
             onClose()
           }}
         >
-          {already ? 'Já sugerida para este evento' : 'Enviar sugestão'}
+          {already ? 'Já sugerida para este evento' : building ? (medleyIds.length < 2 ? 'Escolha mais uma música' : 'Sugerir medley') : 'Enviar sugestão'}
         </Button>
       }
     >
+      {song && !isMedley(song) && (
+        <div className="mb-5">
+          {building ? (
+            <div className="rounded-3xl border border-primary/30 bg-primary-soft/40 p-3">
+              <div className="mb-3 flex items-center gap-2 px-1">
+                <Layers className="size-4 text-primary" />
+                <span className="flex-1 text-[13px] font-bold tracking-wide text-primary uppercase">Medley</span>
+                <button type="button" onClick={() => setMedleyIds(null)} className="text-[13px] font-bold text-muted hover:text-ink">
+                  Sugerir só esta
+                </button>
+              </div>
+              <MedleyBuilder ids={medleyIds} onChange={setMedleyIds} name={medleyName} onNameChange={setMedleyName} />
+            </div>
+          ) : (
+            <StartMedleyButton label="Juntar com outra música (medley)" onClick={() => setMedleyIds([songId])} />
+          )}
+        </div>
+      )}
+      <div className="mb-2 text-[13px] font-semibold text-ink-2">Para quando?</div>
       <div className="space-y-2">
         {withInfo.map(({ s, info }) => (
           <button
@@ -318,6 +355,8 @@ export function SongPickerSheet({
   title = 'Escolher música',
   excludeIds = [],
   suggestions,
+  medley = false,
+  startWithMedley = false,
 }: {
   open: boolean
   onClose: () => void
@@ -325,17 +364,94 @@ export function SongPickerSheet({
   title?: string
   excludeIds?: Id[]
   suggestions?: Array<{ song: Song; reason?: string; key?: string | null }>
+  /** Deixa juntar várias músicas num medley, que chega em `onPick` como uma música só. */
+  medley?: boolean
+  /** Já abre montando o medley. */
+  startWithMedley?: boolean
 }) {
   const songs = useSongs()
   const [q, setQ] = useState('')
   const exclude = useMemo(() => new Set(excludeIds), [excludeIds])
   const results = useMemo(() => searchSongs(songs, q).filter((s) => !exclude.has(s.id)), [songs, q, exclude])
+  const [medleyIds, setMedleyIds] = useState<Id[] | null>(null)
+  const [medleyName, setMedleyName] = useState('')
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    if (!open) return
+    setMedleyIds(startWithMedley ? [] : null)
+    setMedleyName('')
+  }, [open, startWithMedley])
+
+  const building = medley && medleyIds !== null
 
   return (
-    <Sheet open={open} onClose={onClose} title={title} tall>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={building ? 'Montar medley' : title}
+      description={building ? 'Duas ou mais músicas, uma emendada na outra, que contam como uma só.' : undefined}
+      tall
+      footer={
+        building && (
+          <Button
+            className="w-full"
+            icon={Layers}
+            loading={saving}
+            disabled={medleyIds.length < 2}
+            onClick={async () => {
+              setSaving(true)
+              const m = await createMedley(medleyIds, medleyName)
+              setSaving(false)
+              if (!m) return
+              setMedleyIds(startWithMedley ? [] : null)
+              setMedleyName('')
+              onPick(m)
+            }}
+          >
+            {medleyIds.length < 2 ? 'Escolha pelo menos 2 músicas' : `Usar o medley (${medleyIds.length} músicas)`}
+          </Button>
+        )
+      }
+    >
+      {building ? (
+        <>
+          {!startWithMedley && (
+            <button type="button" onClick={() => setMedleyIds(null)} className="mb-3 text-[13px] font-bold text-primary">
+              ← Voltar para a lista
+            </button>
+          )}
+          <MedleyBuilder ids={medleyIds} onChange={setMedleyIds} name={medleyName} onNameChange={setMedleyName} />
+        </>
+      ) : (
+        <SongPickerList {...{ q, setQ, results, suggestions, onPick, medley, onStartMedley: () => setMedleyIds([]) }} />
+      )}
+    </Sheet>
+  )
+}
+
+function SongPickerList({
+  q,
+  setQ,
+  results,
+  suggestions,
+  onPick,
+  medley,
+  onStartMedley,
+}: {
+  q: string
+  setQ: (v: string) => void
+  results: Song[]
+  suggestions?: Array<{ song: Song; reason?: string; key?: string | null }>
+  onPick: (song: Song) => void
+  medley: boolean
+  onStartMedley: () => void
+}) {
+  return (
+    <>
       <div className="sticky top-0 z-10 -mx-5 bg-surface px-5 pb-3 md:-mx-6 md:px-6">
         <SearchInput value={q} onChange={setQ} placeholder="Título, artista, trecho da letra…" />
       </div>
+      {medley && !q && <StartMedleyButton onClick={onStartMedley} className="mb-3" />}
       {!q && suggestions && suggestions.length > 0 && (
         <div className="mb-3">
           <div className="mb-1 px-2 text-[12px] font-bold tracking-wide text-primary uppercase">Sugestões do assistente</div>
@@ -363,6 +479,6 @@ export function SongPickerSheet({
         ))}
         {results.length === 0 && <p className="py-8 text-center text-[14px] text-muted">Nenhuma música encontrada.</p>}
       </div>
-    </Sheet>
+    </>
   )
 }

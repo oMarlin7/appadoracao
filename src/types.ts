@@ -43,6 +43,11 @@ export interface Song {
   spotifyUrl?: string | null
   /** Capa: link da imagem (YouTube/Spotify) ou foto enviada (data URL). Sem capa = arte gerada. */
   coverUrl?: string | null
+  /**
+   * Medley: as músicas que o formam, na ordem em que são tocadas. Conta como uma música só
+   * (setlist, votação, playlist); a cifra é a de cada parte, uma depois da outra.
+   */
+  medleyIds?: Id[] | null
   createdBy: Id | null
   createdAt: string
   updatedAt: string

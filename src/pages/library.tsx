@@ -2,7 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router'
 import { ArrowUpDown, Heart, LayoutGrid, List, Music, Plus, SlidersHorizontal, Sparkles, X } from 'lucide-react'
 import { HeaderAvatar, Page, PageHeader } from '@/components/layout'
-import { SongCard, SongRow, ThemeTile } from '@/components/song-bits'
+import { SongCard, SongRow, ThemeTile, songSubtitle } from '@/components/song-bits'
 import { Button, IconButton, LinkButton } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
 import { Chip, EmptyState, SearchInput, SectionTitle } from '@/components/ui/primitives'
@@ -148,7 +148,7 @@ function SongList({ songs, query, grid, groupByLetter }: { songs: Song[]; query?
     return (
       <div className="grid grid-cols-2 gap-x-3 gap-y-5 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5">
         {songs.map((s) => (
-          <SongCard key={s.id} song={s} to={`/musica/${s.id}`} className="w-full sm:w-full" caption={s.artist} />
+          <SongCard key={s.id} song={s} to={`/musica/${s.id}`} className="w-full sm:w-full" caption={songSubtitle(s, { themes: false })} />
         ))}
       </div>
     )

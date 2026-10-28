@@ -29,6 +29,7 @@ import { Logo } from './logo'
 import { InboxBell } from './for-you'
 import { AudioDock } from './media'
 import { useVotingAutomation } from './voting'
+import { WhatsNewHost } from './whats-new'
 
 interface NavItem {
   to: string
@@ -235,6 +236,7 @@ export function AppLayout() {
       {!hideNav && <BottomNav />}
       {/* Telas sem a navegação têm a própria barra no rodapé (cifra, editor, chat): o player sobe. */}
       <AudioDock aboveToolbar={hideNav} />
+      <WhatsNewHost />
     </div>
   )
 }

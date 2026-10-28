@@ -270,6 +270,7 @@ export function ServiceVoting({ service }: { service: Service }) {
         onClose={() => setPicking(false)}
         title="Sugerir para a votação"
         excludeIds={candidates.map((c) => c.songId)}
+        medley
         onPick={async (song) => {
           setPicking(false)
           if (await suggestSong(song.id, service.id, '')) toast.success(open ? `“${song.title}” entrou na votação 🗳️` : `“${song.title}” vai para a votação`)

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
-import { useBlocker, useNavigate, useParams } from 'react-router'
+import { Navigate, useBlocker, useNavigate, useParams } from 'react-router'
 import { toast } from 'sonner'
 import {
   ChevronDown,
@@ -25,6 +25,7 @@ import { Card, Chip, Field, Input, Segmented, Select, Textarea } from '@/compone
 import { Sheet, confirm } from '@/components/ui/sheet'
 import { newSong, saveSong } from '@/lib/actions'
 import { useDocumentTitle, useThemes } from '@/lib/hooks'
+import { isMedley } from '@/lib/medley'
 import { pickFile } from '@/lib/images'
 import { cropImage } from '@/components/image-cropper'
 import { SmartImport } from '@/components/smart-import'
@@ -111,6 +112,14 @@ function sortLinks(song: Song): Song {
 }
 
 export function SongEditorPage() {
+  const { id } = useParams()
+  const existing = useRow('songs', id)
+  // O medley não tem cifra própria: ele é editado na página dele (quais músicas e em que ordem).
+  if (existing && isMedley(existing)) return <Navigate to={`/musica/${existing.id}`} replace />
+  return <SongEditor />
+}
+
+function SongEditor() {
   const { id } = useParams()
   const existing = useRow('songs', id)
   const isNew = !id

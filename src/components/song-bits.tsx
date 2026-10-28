@@ -1,6 +1,7 @@
 import { memo, useState, type ReactNode } from 'react'
 import { Link } from 'react-router'
-import { Heart, Music } from 'lucide-react'
+import { Heart, Layers, Music } from 'lucide-react'
+import { isMedley } from '@/lib/medley'
 import { prettyAccidentals } from '@/lib/music/theory'
 import { MOMENT_BY_ID, PASTELS, THEME_BY_ID, ink, soft, solid, tint, type Pastel, type Theme } from '@/lib/taxonomy'
 import { cn, hashString } from '@/lib/utils'
@@ -65,7 +66,7 @@ export const SongCover = memo(function SongCover({
   className,
   rounded,
 }: {
-  song: Pick<Song, 'id' | 'themes' | 'coverUrl'>
+  song: Pick<Song, 'id' | 'themes' | 'coverUrl' | 'medleyIds'>
   size?: number
   className?: string
   rounded?: string
@@ -103,6 +104,15 @@ export const SongCover = memo(function SongCover({
           onError={() => setFailed(photo)}
           className="absolute inset-0 size-full object-cover"
         />
+      )}
+      {isMedley(song) && size >= 36 && (
+        <span
+          className="absolute right-[6%] bottom-[6%] grid place-items-center rounded-full bg-primary text-primary-ink shadow-float"
+          style={{ width: Math.max(16, size * 0.32), height: Math.max(16, size * 0.32) }}
+          title="Medley"
+        >
+          <Layers style={{ width: Math.max(10, size * 0.19), height: Math.max(10, size * 0.19) }} strokeWidth={2.4} />
+        </span>
       )}
     </div>
   )
@@ -145,6 +155,7 @@ export function KeyBadge({
 // ---------------------------------------------------------------------------
 
 export function songSubtitle(song: Song, opts: { themes?: boolean } = { themes: true }): string {
+  if (isMedley(song)) return `Medley · ${song.artist || `${song.medleyIds!.length} músicas`}`
   const parts = [song.artist || 'Artista não informado']
   if (opts.themes && song.themes.length) parts.push(song.themes.slice(0, 2).map((t) => THEME_BY_ID[t]?.short ?? THEME_BY_ID[t]?.name ?? t).join(', '))
   return parts.join(' · ')
@@ -228,7 +239,7 @@ export function SongCard({ song, to, className, caption }: { song: Song; to: str
       <SongCover song={song} size={160} className="aspect-square !h-auto !w-full transition-transform duration-300 group-hover:-translate-y-0.5" rounded="rounded-3xl" />
       <div className="mt-2.5 px-0.5">
         <div className="truncate text-[14px] font-bold tracking-tight text-ink">{song.title}</div>
-        <div className="truncate text-[12.5px] text-muted">{caption ?? song.artist}</div>
+        <div className="truncate text-[12.5px] text-muted">{caption ?? songSubtitle(song, { themes: false })}</div>
       </div>
     </Link>
   )

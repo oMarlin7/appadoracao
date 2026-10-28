@@ -11,6 +11,7 @@ import {
   Copy,
   Headphones,
   Heart,
+  Layers,
   Lightbulb,
   ListPlus,
   Maximize2,
@@ -30,14 +31,16 @@ import { Avatar, AvatarStack } from '@/components/avatar'
 import { ChordSheet } from '@/components/chord-sheet'
 import { KeyPickerSheet } from '@/components/key-picker'
 import { ListenPanel, songMediaLinks } from '@/components/media'
+import { MedleyPartsList, MedleySheet } from '@/components/medley'
 import { Page, TopBar } from '@/components/layout'
 import { KeyBadge, MomentPill, SongCover } from '@/components/song-bits'
 import { Button, IconButton, LinkButton } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
 import { Card, EmptyState, Segmented, Tag } from '@/components/ui/primitives'
 import { confirm } from '@/components/ui/sheet'
-import { deleteSong, sendMessage, setMyPref, setTeamKey, toggleFavorite } from '@/lib/actions'
+import { deleteSong, sendMessage, setMyPref, setTeamKey, toggleFavorite, updateMedley } from '@/lib/actions'
 import { useAutoScroll, useDocumentTitle, useFavoriteIds, useWakeLock } from '@/lib/hooks'
+import { isMedley, medleyParts, medleyTitle } from '@/lib/medley'
 import { useMetronome } from '@/lib/metronome'
 import { docLyrics, docToText } from '@/lib/music/sheet'
 import { keyNameFor, parseKey, prettyAccidentals } from '@/lib/music/theory'
@@ -137,7 +140,9 @@ function SongView({ song }: { song: Song }) {
   const [scrolling, setScrolling] = useState(false)
   const [listening, setListening] = useState(false)
   const hasMedia = songMediaLinks(song).length > 0 || recordingCount > 0
-  const [sheetOpen, setSheetOpen] = useState<null | 'key' | 'playlist' | 'service' | 'suggest'>(null)
+  const medley = isMedley(song)
+  const songs = useTable('songs')
+  const [sheetOpen, setSheetOpen] = useState<null | 'key' | 'playlist' | 'service' | 'suggest' | 'medley'>(null)
   useAutoScroll(scrolling, scrollSpeed)
   useWakeLock(keepAwake)
 
@@ -183,7 +188,9 @@ function SongView({ song }: { song: Song }) {
             />
             <Menu
               items={[
-                { label: 'Editar música', icon: Pencil, onSelect: () => navigate(`/musica/${song.id}/editar`) },
+                medley
+                  ? { label: 'Editar medley', icon: Layers, onSelect: () => setSheetOpen('medley') }
+                  : { label: 'Editar música', icon: Pencil, onSelect: () => navigate(`/musica/${song.id}/editar`) },
                 { label: 'Adicionar a um evento', icon: CalendarPlus, hidden: !isLeader, description: 'Só o líder escolhe as músicas', onSelect: () => setSheetOpen('service') },
                 { label: 'Adicionar à playlist', icon: ListPlus, onSelect: () => setSheetOpen('playlist') },
                 { label: 'Sugerir para um culto', icon: Lightbulb, onSelect: () => setSheetOpen('suggest') },
@@ -197,19 +204,21 @@ function SongView({ song }: { song: Song }) {
                 { label: 'Compartilhar cifra', description: 'No tom que está na tela', icon: Share2, onSelect: () => void share('cifra'), hidden: !sheet.hasChords },
                 { label: 'Copiar letra', icon: Copy, onSelect: () => void share('letra') },
                 {
-                  label: 'Excluir música',
+                  label: medley ? 'Excluir medley' : 'Excluir música',
                   icon: Trash2,
                   danger: true,
                   hidden: !canDelete,
                   onSelect: async () => {
                     const ok = await confirm({
-                      title: 'Excluir esta música?',
-                      description: `“${song.title}” será apagada para toda a equipe.`,
+                      title: medley ? 'Excluir este medley?' : 'Excluir esta música?',
+                      description: medley
+                        ? `“${song.title}” será apagado para toda a equipe. As músicas dele continuam no app.`
+                        : `“${song.title}” será apagada para toda a equipe.`,
                       confirmLabel: 'Excluir',
                       danger: true,
                     })
                     if (ok && (await deleteSong(song.id))) {
-                      toast.success('Música excluída')
+                      toast.success(medley ? 'Medley excluído' : 'Música excluída')
                       navigate('/musicas')
                     }
                   },
@@ -243,6 +252,11 @@ function SongView({ song }: { song: Song }) {
             <h1 className="text-[24px] leading-tight font-extrabold tracking-tight text-ink sm:text-[30px]">{song.title}</h1>
             <p className="mt-1 truncate text-[14.5px] font-medium text-muted">{song.artist || 'Artista não informado'}</p>
             <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+              {medley && (
+                <Tag color="lavender" icon={Layers}>
+                  Medley · {plural(medleyParts(song, songs).length, 'música', 'músicas')}
+                </Tag>
+              )}
               {seq?.moment && <MomentPill id={seq.moment} />}
               {song.themes.slice(0, 3).map((t) => {
                 const theme = THEME_BY_ID[t]
@@ -268,7 +282,7 @@ function SongView({ song }: { song: Song }) {
           <Button size="sm" icon={Lightbulb} onClick={() => setSheetOpen('suggest')}>
             Sugerir para o culto
           </Button>
-          {tab !== 'sobre' && (
+          {tab !== 'sobre' && !medley && (
             <Button
               variant={listening ? 'primary' : hasMedia ? 'soft' : 'outline'}
               size="sm"
@@ -399,6 +413,22 @@ function SongView({ song }: { song: Song }) {
       <AddToPlaylistSheet songId={song.id} open={sheetOpen === 'playlist'} onClose={() => setSheetOpen(null)} />
       <AddToServiceSheet song={song} open={sheetOpen === 'service'} onClose={() => setSheetOpen(null)} initialKey={sheet.displayKey} />
       <SuggestSheet songId={song.id} open={sheetOpen === 'suggest'} onClose={() => setSheetOpen(null)} />
+      {medley && (
+        <MedleySheet
+          open={sheetOpen === 'medley'}
+          onClose={() => setSheetOpen(null)}
+          title="Editar medley"
+          initialIds={song.medleyIds ?? []}
+          // Nome automático ("A + B") acompanha as músicas; um nome escolhido pela equipe fica.
+          initialName={song.title === medleyTitle(medleyParts(song, songs)) ? '' : song.title}
+          onConfirm={async (ids, name) => {
+            if (await updateMedley(song.id, ids, name)) {
+              toast.success('Medley atualizado')
+              setSheetOpen(null)
+            }
+          }}
+        />
+      )}
     </>
   )
 }
@@ -417,6 +447,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
 }
 
 function AboutTab({ song }: { song: Song }) {
+  const medley = isMedley(song)
   const profiles = useTable('profiles')
   const favorites = useRows('favorites')
   const services = useRows('services')
@@ -429,6 +460,7 @@ function AboutTab({ song }: { song: Song }) {
 
   return (
     <div className="space-y-4">
+      {medley && <MedleyPartsList song={song} />}
       {song.meaning && (
         <Card className="p-5">
           <div className="mb-2 flex items-center gap-2 text-[13px] font-bold tracking-wide text-primary uppercase">
@@ -512,7 +544,7 @@ function AboutTab({ song }: { song: Song }) {
         </Card>
       )}
 
-      <ListenPanel song={song} />
+      {!medley && <ListenPanel song={song} />}
 
       <Card className="p-5">
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
