@@ -1,5 +1,6 @@
 import { Fragment, memo, type CSSProperties } from 'react'
-import type { MedleyPart, Piece, SectionType, SheetDoc, SheetLine, SheetSection } from '@/lib/music/sheet'
+import { ArrowDownRight } from 'lucide-react'
+import type { MedleyCue, MedleyPart, Piece, SectionType, SheetDoc, SheetLine, SheetSection } from '@/lib/music/sheet'
 import { lineText } from '@/lib/music/sheet'
 import { prettyAccidentals } from '@/lib/music/theory'
 import { tint, type Pastel } from '@/lib/taxonomy'
@@ -104,17 +105,23 @@ export const ChordSheet = memo(function ChordSheet({ doc, mode, fontScale = 1, s
   const lyricsOnly = mode === 'letra'
   const style = { fontSize: `${(lyricsOnly ? 20 : 16.5) * fontScale}px` } as CSSProperties
 
-  // Num medley, o começo de cada música fica marcado mesmo quando a primeira seção dela some
-  // (ex.: a introdução só de acordes, na visão de letra).
+  // Num medley, o começo de cada música e o aviso da troca ficam mesmo quando a seção em que
+  // estavam some (ex.: a introdução ou o final só de acordes, na visão de letra).
   const sections: SheetSection[] = []
   let pendingPart: MedleyPart | undefined
   for (const s of doc.sections) {
     const lines = lyricsOnly ? s.lines.filter((l) => l.kind === 'lyric' || l.kind === 'blank' || l.kind === 'comment') : s.lines
     const part = s.part ?? pendingPart
-    if (lyricsOnly ? lines.some((l) => l.kind === 'lyric') : lines.length > 0 || s.label || part) {
+    if (lyricsOnly ? lines.some((l) => l.kind === 'lyric') : lines.length > 0 || s.label || part || s.cue) {
       sections.push({ ...s, lines, part })
       pendingPart = undefined
-    } else if (s.part) pendingPart = s.part
+    } else {
+      if (s.part) pendingPart = s.part
+      const prev = sections[sections.length - 1]
+      if (s.cue && prev && !pendingPart) sections[sections.length - 1] = { ...prev, cue: s.cue }
+      else if (s.cue) sections.push({ ...s, lines: [], label: null, part })
+      if (s.cue && pendingPart) pendingPart = undefined
+    }
   }
 
   if (!sections.some((s) => s.lines.length || s.label)) {
@@ -184,6 +191,7 @@ export const ChordSheet = memo(function ChordSheet({ doc, mode, fontScale = 1, s
                 }
               })}
             </section>
+            {section.cue && <MedleyCueBanner cue={section.cue} />}
           </Fragment>
         )
       })}
@@ -198,11 +206,30 @@ function MedleyPartHeader({ part, first }: { part: MedleyPart; first: boolean })
       <span className="grid size-[1.7em] shrink-0 place-items-center rounded-full bg-primary text-[0.8em] font-extrabold text-primary-ink">{part.index}</span>
       <span className="min-w-0 flex-1 leading-tight">
         <span className="block truncate text-[0.95em] font-extrabold text-ink">{part.title}</span>
-        {part.artist && <span className="block truncate text-[0.72em] font-semibold text-muted">{part.artist}</span>}
+        {(part.range || part.artist) && (
+          <span className="block truncate text-[0.72em] font-semibold text-muted">{part.range ? `Trecho: ${part.range}` : part.artist}</span>
+        )}
       </span>
       {part.key && (
         <span className="shrink-0 rounded-[0.6em] bg-primary-soft px-[0.55em] py-[0.15em] text-[0.8em] font-extrabold text-primary">{prettyAccidentals(part.key)}</span>
       )}
+    </div>
+  )
+}
+
+/** Fim do trecho: avisa para qual música troca, em que parte ela entra e em que tom. */
+function MedleyCueBanner({ cue }: { cue: MedleyCue }) {
+  return (
+    <div className="-mt-[0.6em] mb-[1.2em] flex items-center gap-[0.55em] rounded-2xl border-2 border-dashed border-primary/40 bg-primary-soft/50 px-[0.8em] py-[0.5em] font-sans text-primary">
+      <ArrowDownRight className="size-[1.1em] shrink-0" strokeWidth={2.6} />
+      <span className="min-w-0 flex-1 leading-tight">
+        <span className="block truncate text-[0.82em] font-extrabold">Troca para {cue.index} · {cue.title}</span>
+        {(cue.entry || cue.key) && (
+          <span className="block truncate text-[0.7em] font-bold opacity-80">
+            {[cue.entry && `entra em: ${cue.entry}`, cue.key && `Tom ${prettyAccidentals(cue.key)}`].filter(Boolean).join(' · ')}
+          </span>
+        )}
+      </span>
     </div>
   )
 }

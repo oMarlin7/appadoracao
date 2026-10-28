@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { findMedley, isMedley, medleyArtist, medleyDoc, medleyParts, medleyTitle } from './medley'
+import { cleanCuts, cutRange, findMedley, isMedley, medleyArtist, medleyDoc, medleyParts, medleyTitle, rangeText, sectionRef, songSections } from './medley'
 import { docChords, docLyrics, docToText } from './music/sheet'
 import type { Song } from '@/types'
 
@@ -87,5 +87,66 @@ describe('medley', () => {
     const vazia = song('vazia', { title: 'Sem cifra ainda' })
     const { doc } = medleyDoc([bondade, vazia])
     expect(doc.sections.filter((s) => s.part).map((s) => s.part!.title)).toEqual(['Bondade de Deus', 'Sem cifra ainda'])
+  })
+})
+
+describe('onde troca de música', () => {
+  const ponte = song('ponte', {
+    title: 'Grande É o Senhor',
+    originalKey: 'G',
+    content: ['[Intro] G  C', '', '[Verso]', 'G       C', 'Grande é o Senhor', '', '[Refrão]', 'G     D', 'Santo, santo', '', '[Ponte]', 'Em    C', 'Digno de louvor', '', '[Refrão]', 'G     D', 'Santo outra vez'].join('\n'),
+  })
+  const entra = song('entra', {
+    title: 'Ele Vive',
+    originalKey: 'A',
+    content: ['[Intro] A  E', '', '[Verso]', 'A       E', 'Ele vive', '', '[Refrão]', 'A     E', 'Ressuscitou'].join('\n'),
+  })
+
+  it('dá nome a cada seção, contando as repetidas', () => {
+    expect(songSections(ponte).map((o) => o.name)).toEqual(['Intro', 'Verso', 'Refrão (1ª vez)', 'Ponte', 'Refrão (2ª vez)'])
+    expect(songSections(ponte)[2].snippet).toBe('Santo, santo')
+  })
+
+  it('a cifra e a letra mostram só o trecho escolhido, com o aviso da troca', () => {
+    const opts = songSections(ponte)
+    const cuts = { ponte: { to: sectionRef(opts, 3, 'to') }, entra: { from: sectionRef(songSections(entra), 2, 'from') } }
+    const { doc } = medleyDoc([ponte, entra], cuts)
+    expect(doc.sections.map((s) => s.label)).toEqual(['Intro', 'Verso', 'Refrão', 'Ponte', 'Refrão'])
+    expect(doc.sections[0].part?.range).toBe('começo → Ponte')
+    expect(doc.sections[3].cue).toEqual({ index: 2, title: 'Ele Vive', entry: 'Refrão', key: 'A' })
+    expect(doc.sections[4].part?.range).toBe('Refrão → fim')
+    const text = docToText(doc)
+    expect(text).not.toContain('Santo outra vez')
+    expect(text).not.toContain('Ele vive')
+    expect(text).toContain('→ Troca para 2. Ele Vive (entra em: Refrão · Tom A)')
+    expect(docLyrics(doc, { labels: true })).toContain('→ Troca para 2. Ele Vive')
+  })
+
+  it('música inteira quando não há trecho, e "começo"/"fim" não viram trecho', () => {
+    const opts = songSections(ponte)
+    expect(sectionRef(opts, 0, 'from')).toBeNull()
+    expect(sectionRef(opts, 4, 'to')).toBeNull()
+    expect(rangeText(opts, cutRange(opts, null))).toBeUndefined()
+    expect(cleanCuts({ ponte: { from: null, to: null }, sumiu: { to: { index: 1, label: 'Verso' } } }, ['ponte', 'entra'])).toBeNull()
+  })
+
+  it('acha a mesma seção mesmo depois de editarem a cifra', () => {
+    // Guardado: "Ponte" na posição 3. Alguém pôs um Pré-Refrão antes: a Ponte foi para a 4.
+    const editada = song('ponte', { ...ponte, content: ponte.content.replace('[Refrão]', '[Pré-Refrão]\nC   D\nPra ele\n\n[Refrão]') })
+    const opts = songSections(editada)
+    expect(cutRange(opts, { to: { index: 3, label: 'Ponte' } })).toEqual([0, 4])
+    // A seção sumiu: a música volta a ir até o fim.
+    expect(cutRange(opts, { to: { index: 3, label: 'Coda' } })).toEqual([0, opts.length - 1])
+  })
+
+  it('começo depois do fim não quebra: vai ao menos até o começo', () => {
+    const opts = songSections(ponte)
+    expect(cutRange(opts, { from: { index: 3, label: 'Ponte' }, to: { index: 1, label: 'Verso' } })).toEqual([3, 3])
+  })
+
+  it('medley com outros trechos não é o mesmo medley', () => {
+    const a = song('a1', { medleyIds: ['ponte', 'entra'], medleyCuts: { ponte: { to: { index: 3, label: 'Ponte' } } } })
+    expect(findMedley([a], ['ponte', 'entra'], { ponte: { to: { index: 3, label: 'Ponte' } } })?.id).toBe('a1')
+    expect(findMedley([a], ['ponte', 'entra'])).toBeUndefined()
   })
 })

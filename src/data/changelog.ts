@@ -18,12 +18,24 @@ export interface ReleaseItem {
 }
 
 export interface Release {
-  /** AAAA-MM-DD do dia em que a versão foi publicada. */
+  /** AAAA-MM-DD do dia em que a versão foi publicada (mais de uma no mesmo dia: "…b", "…c"). */
   id: string
   items: ReleaseItem[]
 }
 
 export const RELEASES: Release[] = [
+  {
+    id: '2026-10-28b',
+    items: [
+      {
+        emoji: '🔀',
+        kind: 'novo',
+        color: 'orchid',
+        title: 'Escolha onde troca no medley',
+        text: 'Abra o medley e toque em **Onde troca**: escolha em que parte cada música começa e até onde vai. A cifra e a letra mostram só esse trecho, com o aviso da troca.',
+      },
+    ],
+  },
   {
     id: '2026-10-28',
     items: [

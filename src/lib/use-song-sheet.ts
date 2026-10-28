@@ -16,7 +16,7 @@ export function useSongSheet(song: Song | undefined, opts: { serviceKey?: string
   const accidentals = useSettings((s) => s.accidentals)
   const songs = useTable('songs')
   // Medley: a cifra vem das partes (cada uma no tom da equipe), uma depois da outra.
-  const medley = useMemo(() => (song && isMedley(song) ? medleyDoc(medleyParts(song, songs)) : null), [song, songs])
+  const medley = useMemo(() => (song && isMedley(song) ? medleyDoc(medleyParts(song, songs), song.medleyCuts) : null), [song, songs])
   const parsed = useMemo(() => medley?.doc ?? parseSheet(song?.content ?? ''), [medley, song?.content])
   const hasChords = useMemo(() => docChords(parsed).length > 0, [parsed])
   const detected = useMemo(() => (song && !medley && !song.originalKey && hasChords ? detectKeyFromText(song.content) : null), [song, medley, hasChords])
@@ -38,10 +38,16 @@ export function useSongSheet(song: Song | undefined, opts: { serviceKey?: string
     const shift = semitonesBetween(baseKey, displayKey) - capo
     const shapeKey = capo ? transposeKey(displayKey, -capo) : displayKey
     const out = mod12(shift) === 0 && accidentals === 'auto' ? parsed : transposeDoc(parsed, shift, makeSpeller(shapeKey, accidentals))
-    // O tom de cada parte do medley acompanha a transposição (o que soa, sem o capotraste).
+    // O tom de cada parte do medley (e o da troca) acompanha a transposição: o que soa, sem o capotraste.
     const sounding = semitonesBetween(baseKey, displayKey)
     if (!medley || !sounding) return out
-    return { ...out, sections: out.sections.map((s) => (s.part?.key ? { ...s, part: { ...s.part, key: transposeKey(s.part.key, sounding, accidentals) } } : s)) }
+    const move = (key: string | null) => (key ? transposeKey(key, sounding, accidentals) : key)
+    return {
+      ...out,
+      sections: out.sections.map((s) =>
+        s.part || s.cue ? { ...s, part: s.part && { ...s.part, key: move(s.part.key) }, cue: s.cue && { ...s.cue, key: move(s.cue.key) } } : s,
+      ),
+    }
   }, [parsed, baseKey, displayKey, capo, accidentals, medley])
 
   let source: KeySource = 'alterado'

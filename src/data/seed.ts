@@ -53,6 +53,8 @@ export function buildDemoSeed(now = new Date()): DataSnapshot {
     title: medleyTitle(medley),
     artist: medleyArtist(medley),
     medleyIds: medley.map((p) => p.id),
+    // Celebrai até o refrão; Ele Vive entra no refrão.
+    medleyCuts: { 'ex-celebrai': { to: { index: 3, label: 'Refrão' } }, 'ex-ele-vive': { from: { index: 3, label: 'Refrão' } } },
     originalKey: partKey(medley[0]),
     teamKey: null,
     bpm: null,

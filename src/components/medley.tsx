@@ -1,23 +1,38 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router'
-import { ArrowDown, ArrowUp, Layers, Plus, X } from 'lucide-react'
+import { ArrowDown, ArrowDownRight, ArrowUp, ChevronDown, Layers, Plus, Shuffle, X } from 'lucide-react'
 import { useSongs } from '@/lib/hooks'
-import { isMedley, medleyParts, medleyTitle, partKey } from '@/lib/medley'
+import { cleanCuts, cutRange, isMedley, medleyParts, medleyTitle, partKey, rangeText, sectionRef, songSections } from '@/lib/medley'
 import { keyCompatibility, prettyAccidentals } from '@/lib/music/theory'
 import { searchSongs } from '@/lib/search'
 import { useTable } from '@/lib/store'
 import { cn, plural } from '@/lib/utils'
-import type { Id, Song } from '@/types'
+import type { Id, MedleyCut, Song } from '@/types'
 import { KeyBadge, SongCover } from './song-bits'
 import { Button, IconButton } from './ui/button'
-import { Card, Field, Input, SearchInput } from './ui/primitives'
+import { Card, Field, Input, SearchInput, Select } from './ui/primitives'
 import { Sheet } from './ui/sheet'
 
 /**
  * Monta o medley: as músicas na ordem em que vão ser tocadas, a busca da próxima (com as que
  * emendam no tom da última logo à mão) e um nome, se a equipe quiser.
  */
-export function MedleyBuilder({ ids, onChange, name, onNameChange }: { ids: Id[]; onChange: (ids: Id[]) => void; name: string; onNameChange: (v: string) => void }) {
+export function MedleyBuilder({
+  ids,
+  onChange,
+  name,
+  onNameChange,
+  cuts,
+  onCutsChange,
+}: {
+  ids: Id[]
+  onChange: (ids: Id[]) => void
+  name: string
+  onNameChange: (v: string) => void
+  /** Onde troca de música (opcional). */
+  cuts?: Record<Id, MedleyCut>
+  onCutsChange?: (cuts: Record<Id, MedleyCut>) => void
+}) {
   const songs = useTable('songs')
   const all = useSongs()
   const [q, setQ] = useState('')
@@ -64,6 +79,8 @@ export function MedleyBuilder({ ids, onChange, name, onNameChange }: { ids: Id[]
         </ol>
       )}
 
+      {cuts && onCutsChange && <MedleyTransitionsToggle parts={parts} cuts={cuts} onChange={onCutsChange} />}
+
       <div>
         <div className="mb-2 text-[13px] font-semibold text-ink-2">{parts.length ? 'Juntar com' : 'Escolha as músicas'}</div>
         <SearchInput value={q} onChange={setQ} placeholder="Buscar a próxima música…" />
@@ -109,6 +126,7 @@ export function MedleySheet({
   onClose,
   initialIds = [],
   initialName = '',
+  initialCuts = null,
   title = 'Montar medley',
   confirmLabel = 'Salvar medley',
   onConfirm,
@@ -117,17 +135,20 @@ export function MedleySheet({
   onClose: () => void
   initialIds?: Id[]
   initialName?: string
+  initialCuts?: Record<Id, MedleyCut> | null
   title?: string
   confirmLabel?: string
-  onConfirm: (ids: Id[], name: string) => Promise<unknown>
+  onConfirm: (ids: Id[], name: string, cuts: Record<Id, MedleyCut>) => Promise<unknown>
 }) {
   const [ids, setIds] = useState<Id[]>(initialIds)
   const [name, setName] = useState(initialName)
+  const [cuts, setCuts] = useState<Record<Id, MedleyCut>>(initialCuts ?? {})
   const [saving, setSaving] = useState(false)
   useEffect(() => {
     if (!open) return
     setIds(initialIds)
     setName(initialName)
+    setCuts(initialCuts ?? {})
     // Só ao abrir: o que vem de fora é o ponto de partida.
   }, [open])
   return (
@@ -145,7 +166,7 @@ export function MedleySheet({
           disabled={ids.length < 2}
           onClick={async () => {
             setSaving(true)
-            await onConfirm(ids, name)
+            await onConfirm(ids, name, cuts)
             setSaving(false)
           }}
         >
@@ -153,7 +174,7 @@ export function MedleySheet({
         </Button>
       }
     >
-      <MedleyBuilder ids={ids} onChange={setIds} name={name} onNameChange={setName} />
+      <MedleyBuilder ids={ids} onChange={setIds} name={name} onNameChange={setName} cuts={cuts} onCutsChange={setCuts} />
     </Sheet>
   )
 }
@@ -177,8 +198,8 @@ export function StartMedleyButton({ onClick, label = 'Juntar músicas num medley
   )
 }
 
-/** As músicas de um medley, na ordem, cada uma levando à própria página. */
-export function MedleyPartsList({ song, className }: { song: Song; className?: string }) {
+/** As músicas de um medley, na ordem, cada uma levando à própria página (com o trecho de cada uma). */
+export function MedleyPartsList({ song, className, onEditTransitions }: { song: Song; className?: string; onEditTransitions?: () => void }) {
   const songs = useTable('songs')
   const parts = medleyParts(song, songs)
   return (
@@ -187,21 +208,177 @@ export function MedleyPartsList({ song, className }: { song: Song; className?: s
         <Layers className="size-4" /> Medley · {plural(parts.length, 'música', 'músicas')}
       </div>
       <ol>
-        {parts.map((p, i) => (
-          <li key={p.id}>
-            <Link to={`/musica/${p.id}`} className="flex items-center gap-3 rounded-2xl px-2.5 py-2 hover:bg-surface-2">
-              <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft text-[12.5px] font-extrabold text-primary">{i + 1}</span>
-              <SongCover song={p} size={40} />
-              <span className="min-w-0 flex-1">
-                <span className="block truncate text-[14.5px] font-bold text-ink">{p.title}</span>
-                <span className="block truncate text-[12.5px] text-muted">{p.artist || 'Artista não informado'}</span>
-              </span>
-              <KeyBadge value={partKey(p)} kind={p.teamKey ? 'team' : 'original'} />
-            </Link>
-          </li>
-        ))}
+        {parts.map((p, i) => {
+          const options = songSections(p)
+          const range = rangeText(options, cutRange(options, song.medleyCuts?.[p.id]))
+          return (
+            <li key={p.id}>
+              <Link to={`/musica/${p.id}`} className="flex items-center gap-3 rounded-2xl px-2.5 py-2 hover:bg-surface-2">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary-soft text-[12.5px] font-extrabold text-primary">{i + 1}</span>
+                <SongCover song={p} size={40} />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[14.5px] font-bold text-ink">{p.title}</span>
+                  <span className="block truncate text-[12.5px] text-muted">{range ? `Trecho: ${range}` : p.artist || 'Música inteira'}</span>
+                </span>
+                <KeyBadge value={partKey(p)} kind={p.teamKey ? 'team' : 'original'} />
+              </Link>
+            </li>
+          )
+        })}
       </ol>
       {parts.length < 2 && <p className="px-2.5 pb-2 text-[13px] text-muted">Uma das músicas deste medley foi excluída. Edite o medley para escolher outra.</p>}
+      {onEditTransitions && parts.length >= 2 && (
+        <div className="px-1.5 pt-1 pb-1.5">
+          <Button variant="soft" size="sm" icon={Shuffle} className="w-full" onClick={onEditTransitions}>
+            Escolher onde troca de música
+          </Button>
+        </div>
+      )}
     </Card>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Onde troca de música
+// ---------------------------------------------------------------------------
+
+/**
+ * Para cada música do medley: em que parte ela começa e até onde vai. Entre uma e outra fica
+ * o aviso da troca (para qual música, em que parte ela entra e o tom).
+ */
+export function MedleyTransitions({ parts, cuts, onChange }: { parts: Song[]; cuts: Record<Id, MedleyCut>; onChange: (cuts: Record<Id, MedleyCut>) => void }) {
+  const info = parts.map((p) => {
+    const options = songSections(p)
+    return { song: p, options, range: cutRange(options, cuts[p.id]) }
+  })
+  const set = (id: Id, cut: MedleyCut) => onChange({ ...cuts, [id]: cut })
+
+  return (
+    <ol className="space-y-0">
+      {info.map(({ song, options, range }, i) => {
+        const next = info[i + 1]
+        const pick = (edge: 'from' | 'to', index: number) => {
+          let [from, to] = range
+          if (edge === 'from') from = index
+          else to = index
+          // Começo depois do fim: o outro lado acompanha.
+          if (from > to) edge === 'from' ? (to = options.length - 1) : (from = 0)
+          set(song.id, { from: sectionRef(options, from, 'from'), to: sectionRef(options, to, 'to') })
+        }
+        return (
+          <li key={song.id}>
+            <div className="rounded-2xl bg-surface-2/70 p-3">
+              <div className="flex items-center gap-2">
+                <span className="grid size-7 shrink-0 place-items-center rounded-full bg-primary text-[12.5px] font-extrabold text-primary-ink">{i + 1}</span>
+                <span className="min-w-0 flex-1 truncate text-[14.5px] font-bold text-ink">{song.title}</span>
+                <KeyBadge value={partKey(song)} kind={song.teamKey ? 'team' : 'original'} />
+              </div>
+              {options.length > 1 ? (
+                <div className="mt-2.5 grid grid-cols-2 gap-2">
+                  <SectionSelect label="Começa em" value={range[0]} options={options} onChange={(v) => pick('from', v)} />
+                  <SectionSelect label="Vai até" value={range[1]} options={options} onChange={(v) => pick('to', v)} />
+                </div>
+              ) : (
+                <p className="mt-2 text-[12.5px] text-muted">{options.length ? 'A cifra tem uma parte só: entra inteira.' : 'Ainda sem cifra: entra inteira quando tiver.'}</p>
+              )}
+              <p className="mt-2 text-[12px] font-semibold text-muted">{rangeText(options, range) ? `Trecho: ${rangeText(options, range)}` : 'Música inteira'}</p>
+            </div>
+            {next && (
+              <div className="flex items-center gap-2 px-3 py-2 text-[12.5px] font-bold text-primary">
+                <ArrowDownRight className="size-4 shrink-0" strokeWidth={2.6} />
+                <span className="min-w-0 truncate">
+                  Troca para {next.song.title}
+                  {next.range[0] > 0 && ` · entra em: ${next.options[next.range[0]]?.name}`}
+                  {partKey(song) && partKey(next.song) && partKey(song) !== partKey(next.song) && ` · ${prettyAccidentals(partKey(song)!)} → ${prettyAccidentals(partKey(next.song)!)}`}
+                </span>
+              </div>
+            )}
+          </li>
+        )
+      })}
+    </ol>
+  )
+}
+
+function SectionSelect({ label, value, options, onChange }: { label: string; value: number; options: ReturnType<typeof songSections>; onChange: (v: number) => void }) {
+  return (
+    <label className="block min-w-0">
+      <span className="mb-1 block text-[11.5px] font-bold tracking-wide text-muted uppercase">{label}</span>
+      <Select value={value} onChange={(e) => onChange(Number(e.target.value))} className="h-11 truncate text-[13.5px]">
+        {options.map((o) => (
+          <option key={o.index} value={o.index}>
+            {o.name}
+            {o.snippet ? ` — “${o.snippet}”` : ''}
+          </option>
+        ))}
+      </Select>
+    </label>
+  )
+}
+
+/** Escolher onde troca de música, na página do medley. */
+export function MedleyTransitionsSheet({ song, open, onClose, onSave }: { song: Song; open: boolean; onClose: () => void; onSave: (cuts: Record<Id, MedleyCut> | null) => Promise<unknown> }) {
+  const songs = useTable('songs')
+  const parts = medleyParts(song, songs)
+  const [cuts, setCuts] = useState<Record<Id, MedleyCut>>(song.medleyCuts ?? {})
+  const [saving, setSaving] = useState(false)
+  useEffect(() => {
+    if (open) setCuts(song.medleyCuts ?? {})
+    // Só ao abrir.
+  }, [open])
+  const changed = JSON.stringify(cleanCuts(cuts, song.medleyIds ?? [])) !== JSON.stringify(cleanCuts(song.medleyCuts, song.medleyIds ?? []))
+  return (
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title="Onde troca de música"
+      description="Escolha em que parte cada música começa e até onde vai. A cifra e a letra do medley mostram só esse trecho, com o aviso da troca."
+      tall
+      footer={
+        <div className="flex gap-2">
+          <Button variant="outline" disabled={!Object.keys(cuts).length} onClick={() => setCuts({})}>
+            Músicas inteiras
+          </Button>
+          <Button
+            className="flex-1"
+            icon={Shuffle}
+            loading={saving}
+            disabled={!changed}
+            onClick={async () => {
+              setSaving(true)
+              await onSave(cleanCuts(cuts, song.medleyIds ?? []))
+              setSaving(false)
+            }}
+          >
+            Salvar trocas
+          </Button>
+        </div>
+      }
+    >
+      <MedleyTransitions parts={parts} cuts={cuts} onChange={setCuts} />
+    </Sheet>
+  )
+}
+
+/** Dentro do montar medley: escolher onde troca é opcional e fica fechado até a pessoa abrir. */
+export function MedleyTransitionsToggle({ parts, cuts, onChange }: { parts: Song[]; cuts: Record<Id, MedleyCut>; onChange: (cuts: Record<Id, MedleyCut>) => void }) {
+  const [open, setOpen] = useState(() => Object.keys(cuts).length > 0)
+  if (parts.length < 2) return null
+  return (
+    <div className="rounded-2xl border border-line">
+      <button type="button" onClick={() => setOpen((v) => !v)} aria-expanded={open} className="flex w-full items-center gap-2.5 px-3.5 py-3 text-left">
+        <Shuffle className="size-[18px] shrink-0 text-primary" strokeWidth={2.3} />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[14px] font-bold text-ink">Onde troca de música</span>
+          <span className="block text-[12px] text-muted">Opcional: de qual parte até qual parte de cada uma</span>
+        </span>
+        <ChevronDown className={cn('size-5 shrink-0 text-muted transition-transform', open && 'rotate-180')} />
+      </button>
+      {open && (
+        <div className="px-2.5 pb-2.5">
+          <MedleyTransitions parts={parts} cuts={cuts} onChange={onChange} />
+        </div>
+      )}
+    </div>
   )
 }

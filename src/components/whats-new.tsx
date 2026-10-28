@@ -22,7 +22,9 @@ const useWhatsNew = create<{ releases: Release[] | null }>(() => ({ releases: nu
 
 /** Abre as novidades da versão atual (ex.: pelo perfil). */
 export function showWhatsNew() {
-  if (RELEASES.length) useWhatsNew.setState({ releases: RELEASES.slice(0, 1) })
+  // As versões do dia da mais recente (pode ter saído mais de uma no mesmo dia).
+  const day = RELEASES[0]?.id.slice(0, 10)
+  if (day) useWhatsNew.setState({ releases: RELEASES.filter((r) => r.id.slice(0, 10) === day) })
 }
 
 function closeWhatsNew() {
@@ -30,8 +32,9 @@ function closeWhatsNew() {
   useWhatsNew.setState({ releases: null })
 }
 
+/** "2026-10-28" ou "2026-10-28b" (segunda versão do dia) → "28 de outubro". */
 const releaseDate = (id: string) =>
-  new Date(`${id}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
+  new Date(`${id.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { day: 'numeric', month: 'long' })
 
 /** "toque em **Medley**" → o nome do botão em negrito. */
 function Rich({ text }: { text: string }) {
@@ -60,7 +63,7 @@ export function WhatsNewHost() {
     if (!me || !latest) return
     const seen = readStorage('local', SEEN_KEY)
     // Conta criada depois desta versão: para ela, tudo já é como está.
-    if (!seen && me.createdAt.slice(0, 10) >= latest.id) {
+    if (!seen && me.createdAt.slice(0, 10) >= latest.id.slice(0, 10)) {
       writeStorage('local', SEEN_KEY, latest.id)
       return
     }

@@ -11,7 +11,7 @@ import { useRows, useSession, useTable } from '@/lib/store'
 import { formatDeadline, votingActive, votingInfo } from '@/lib/voting'
 import { MOMENTS, PASTELS, type Pastel } from '@/lib/taxonomy'
 import { cn, friendlyDate, plural } from '@/lib/utils'
-import type { Id, Song } from '@/types'
+import type { Id, MedleyCut, Song } from '@/types'
 import { MedleyBuilder, StartMedleyButton } from './medley'
 import { KeyBadge, SongCover, SongRow } from './song-bits'
 import { Button } from './ui/button'
@@ -155,6 +155,7 @@ export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { son
   /** Medley: as músicas que vão junto com esta (null = só esta música). */
   const [medleyIds, setMedleyIds] = useState<Id[] | null>(null)
   const [medleyName, setMedleyName] = useState('')
+  const [medleyCuts, setMedleyCuts] = useState<Record<Id, MedleyCut>>({})
   const [sending, setSending] = useState(false)
   const allSongs = useRows('songs')
   const song = useTable('songs')[songId]
@@ -163,11 +164,12 @@ export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { son
     setServiceId(preset)
     setMedleyIds(null)
     setMedleyName('')
+    setMedleyCuts({})
   }, [open, preset])
   const selected = serviceId === undefined ? (best?.s.id ?? null) : serviceId
   const selectedInfo = withInfo.find((x) => x.s.id === selected)?.info
   const building = medleyIds !== null
-  const targetId = building ? findMedley(allSongs, medleyIds)?.id : songId
+  const targetId = building ? findMedley(allSongs, medleyIds, medleyCuts)?.id : songId
   const already = !!targetId && suggestions.some((g) => g.songId === targetId && g.serviceId === selected && g.status === 'pendente')
 
   return (
@@ -183,7 +185,7 @@ export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { son
           loading={sending}
           onClick={async () => {
             setSending(true)
-            const m = building ? await createMedley(medleyIds, medleyName) : null
+            const m = building ? await createMedley(medleyIds, medleyName, medleyCuts) : null
             const ok = (!building || m) && (await suggestSong(m?.id ?? songId, selected, note))
             setSending(false)
             if (building && !m) return
@@ -207,7 +209,7 @@ export function SuggestSheet({ songId, open, onClose, serviceId: preset }: { son
                   Sugerir só esta
                 </button>
               </div>
-              <MedleyBuilder ids={medleyIds} onChange={setMedleyIds} name={medleyName} onNameChange={setMedleyName} />
+              <MedleyBuilder ids={medleyIds} onChange={setMedleyIds} name={medleyName} onNameChange={setMedleyName} cuts={medleyCuts} onCutsChange={setMedleyCuts} />
             </div>
           ) : (
             <StartMedleyButton label="Juntar com outra música (medley)" onClick={() => setMedleyIds([songId])} />
@@ -375,11 +377,13 @@ export function SongPickerSheet({
   const results = useMemo(() => searchSongs(songs, q).filter((s) => !exclude.has(s.id)), [songs, q, exclude])
   const [medleyIds, setMedleyIds] = useState<Id[] | null>(null)
   const [medleyName, setMedleyName] = useState('')
+  const [medleyCuts, setMedleyCuts] = useState<Record<Id, MedleyCut>>({})
   const [saving, setSaving] = useState(false)
   useEffect(() => {
     if (!open) return
     setMedleyIds(startWithMedley ? [] : null)
     setMedleyName('')
+    setMedleyCuts({})
   }, [open, startWithMedley])
 
   const building = medley && medleyIds !== null
@@ -400,11 +404,12 @@ export function SongPickerSheet({
             disabled={medleyIds.length < 2}
             onClick={async () => {
               setSaving(true)
-              const m = await createMedley(medleyIds, medleyName)
+              const m = await createMedley(medleyIds, medleyName, medleyCuts)
               setSaving(false)
               if (!m) return
               setMedleyIds(startWithMedley ? [] : null)
               setMedleyName('')
+              setMedleyCuts({})
               onPick(m)
             }}
           >
@@ -420,7 +425,7 @@ export function SongPickerSheet({
               ← Voltar para a lista
             </button>
           )}
-          <MedleyBuilder ids={medleyIds} onChange={setMedleyIds} name={medleyName} onNameChange={setMedleyName} />
+          <MedleyBuilder ids={medleyIds} onChange={setMedleyIds} name={medleyName} onNameChange={setMedleyName} cuts={medleyCuts} onCutsChange={setMedleyCuts} />
         </>
       ) : (
         <SongPickerList {...{ q, setQ, results, suggestions, onPick, medley, onStartMedley: () => setMedleyIds([]) }} />

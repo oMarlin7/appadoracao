@@ -48,9 +48,26 @@ export interface Song {
    * (setlist, votação, playlist); a cifra é a de cada parte, uma depois da outra.
    */
   medleyIds?: Id[] | null
+  /** Medley: o trecho de cada música (id da música → de qual seção até qual). Sem trecho = inteira. */
+  medleyCuts?: Record<Id, MedleyCut> | null
   createdBy: Id | null
   createdAt: string
   updatedAt: string
+}
+
+/**
+ * Uma seção da cifra (ex.: o 2º refrão): a posição e o nome, para achar a mesma seção mesmo
+ * que alguém edite a cifra depois.
+ */
+export interface SectionRef {
+  index: number
+  label: string | null
+}
+
+/** Onde a música entra e até onde vai no medley (vazio = do começo / até o fim). */
+export interface MedleyCut {
+  from?: SectionRef | null
+  to?: SectionRef | null
 }
 
 export interface Favorite {

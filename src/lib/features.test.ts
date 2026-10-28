@@ -183,6 +183,8 @@ describe('notas da atualização', () => {
     expect(unseenReleases('2026-10-28', releases).map((r) => r.id)).toEqual(['2026-11-05'])
     expect(unseenReleases('2026-11-05', releases)).toEqual([])
     expect(unseenReleases(null, releases)).toHaveLength(2)
+    // Segunda versão no mesmo dia: quem viu a primeira vê só a nova.
+    expect(unseenReleases('2026-10-28', [{ id: '2026-10-28b', items: [] }, { id: '2026-10-28', items: [] }]).map((r) => r.id)).toEqual(['2026-10-28b'])
   })
 
   it('chama a pessoa pelo primeiro nome', () => {

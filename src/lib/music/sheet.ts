@@ -47,6 +47,8 @@ export interface SheetSection {
   lines: SheetLine[]
   /** Num medley, a primeira seção de cada música traz qual música começa ali. */
   part?: MedleyPart
+  /** Num medley, a última seção de cada música avisa para qual música troca. */
+  cue?: MedleyCue
 }
 
 export interface MedleyPart {
@@ -57,10 +59,25 @@ export interface MedleyPart {
   artist: string
   /** Tom em que a parte soa (já com a transposição da tela). */
   key: string | null
+  /** Quando não é a música inteira: "Refrão → Ponte", "começo → Ponte"… */
+  range?: string
 }
 
+/** A troca para a próxima música do medley. */
+export interface MedleyCue {
+  index: number
+  title: string
+  /** Seção em que a próxima entra (null = do começo). */
+  entry: string | null
+  key: string | null
+}
+
+/** "→ Troca para 2. Eu Me Rendo (entra em: Refrão · Tom E)" */
+export const medleyCueText = (c: MedleyCue) =>
+  `→ Troca para ${c.index}. ${c.title}${c.entry || c.key ? ` (${[c.entry && `entra em: ${c.entry}`, c.key && `Tom ${c.key}`].filter(Boolean).join(' · ')})` : ''}`
+
 /** "2. Eu Me Rendo · Tom Dm" (para copiar e compartilhar). */
-export const medleyPartHeading = (p: MedleyPart) => `${p.index}. ${p.title}${p.key ? ` · Tom ${p.key}` : ''}`
+export const medleyPartHeading = (p: MedleyPart) => `${p.index}. ${p.title}${p.key ? ` · Tom ${p.key}` : ''}${p.range ? ` · ${p.range}` : ''}`
 
 export interface SheetMeta {
   title?: string
@@ -437,8 +454,8 @@ export function docLyrics(doc: SheetDoc, opts: { labels?: boolean } = {}): strin
     while (lines.length && !lines[0]) lines.shift()
     while (lines.length && !lines[lines.length - 1]) lines.pop()
     if (s.part && opts.labels) blocks.push(medleyPartHeading(s.part))
-    if (!lines.length) continue
-    blocks.push((opts.labels && s.label ? `[${s.label}]\n` : '') + lines.join('\n'))
+    if (lines.length) blocks.push((opts.labels && s.label ? `[${s.label}]\n` : '') + lines.join('\n'))
+    if (s.cue && opts.labels) blocks.push(medleyCueText(s.cue))
   }
   return blocks.join('\n\n')
 }
@@ -506,6 +523,7 @@ export function docToText(doc: SheetDoc): string {
         }
       }
     })
+    if (s.cue) out.push('', medleyCueText(s.cue))
   }
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim()
 }

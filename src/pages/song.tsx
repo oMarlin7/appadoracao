@@ -23,6 +23,7 @@ import {
   Play,
   Plus,
   Share2,
+  Shuffle,
   Timer,
   Trash2,
 } from 'lucide-react'
@@ -31,14 +32,14 @@ import { Avatar, AvatarStack } from '@/components/avatar'
 import { ChordSheet } from '@/components/chord-sheet'
 import { KeyPickerSheet } from '@/components/key-picker'
 import { ListenPanel, songMediaLinks } from '@/components/media'
-import { MedleyPartsList, MedleySheet } from '@/components/medley'
+import { MedleyPartsList, MedleySheet, MedleyTransitionsSheet } from '@/components/medley'
 import { Page, TopBar } from '@/components/layout'
 import { KeyBadge, MomentPill, SongCover } from '@/components/song-bits'
 import { Button, IconButton, LinkButton } from '@/components/ui/button'
 import { Menu } from '@/components/ui/menu'
 import { Card, EmptyState, Segmented, Tag } from '@/components/ui/primitives'
 import { confirm } from '@/components/ui/sheet'
-import { deleteSong, sendMessage, setMyPref, setTeamKey, toggleFavorite, updateMedley } from '@/lib/actions'
+import { deleteSong, sendMessage, setMedleyCuts, setMyPref, setTeamKey, toggleFavorite, updateMedley } from '@/lib/actions'
 import { useAutoScroll, useDocumentTitle, useFavoriteIds, useWakeLock } from '@/lib/hooks'
 import { isMedley, medleyParts, medleyTitle } from '@/lib/medley'
 import { useMetronome } from '@/lib/metronome'
@@ -142,7 +143,7 @@ function SongView({ song }: { song: Song }) {
   const hasMedia = songMediaLinks(song).length > 0 || recordingCount > 0
   const medley = isMedley(song)
   const songs = useTable('songs')
-  const [sheetOpen, setSheetOpen] = useState<null | 'key' | 'playlist' | 'service' | 'suggest' | 'medley'>(null)
+  const [sheetOpen, setSheetOpen] = useState<null | 'key' | 'playlist' | 'service' | 'suggest' | 'medley' | 'transitions'>(null)
   useAutoScroll(scrolling, scrollSpeed)
   useWakeLock(keepAwake)
 
@@ -191,6 +192,7 @@ function SongView({ song }: { song: Song }) {
                 medley
                   ? { label: 'Editar medley', icon: Layers, onSelect: () => setSheetOpen('medley') }
                   : { label: 'Editar música', icon: Pencil, onSelect: () => navigate(`/musica/${song.id}/editar`) },
+                { label: 'Onde troca de música', icon: Shuffle, hidden: !medley, onSelect: () => setSheetOpen('transitions') },
                 { label: 'Adicionar a um evento', icon: CalendarPlus, hidden: !isLeader, description: 'Só o líder escolhe as músicas', onSelect: () => setSheetOpen('service') },
                 { label: 'Adicionar à playlist', icon: ListPlus, onSelect: () => setSheetOpen('playlist') },
                 { label: 'Sugerir para um culto', icon: Lightbulb, onSelect: () => setSheetOpen('suggest') },
@@ -282,6 +284,11 @@ function SongView({ song }: { song: Song }) {
           <Button size="sm" icon={Lightbulb} onClick={() => setSheetOpen('suggest')}>
             Sugerir para o culto
           </Button>
+          {medley && (
+            <Button variant="outline" size="sm" icon={Shuffle} onClick={() => setSheetOpen('transitions')}>
+              Onde troca
+            </Button>
+          )}
           {tab !== 'sobre' && !medley && (
             <Button
               variant={listening ? 'primary' : hasMedia ? 'soft' : 'outline'}
@@ -314,7 +321,7 @@ function SongView({ song }: { song: Song }) {
 
         <div className="mt-6">
           {tab === 'sobre' ? (
-            <AboutTab song={song} />
+            <AboutTab song={song} onEditTransitions={() => setSheetOpen('transitions')} />
           ) : (
             <>
               {listening && <ListenPanel song={song} className="mb-7" />}
@@ -421,9 +428,23 @@ function SongView({ song }: { song: Song }) {
           initialIds={song.medleyIds ?? []}
           // Nome automático ("A + B") acompanha as músicas; um nome escolhido pela equipe fica.
           initialName={song.title === medleyTitle(medleyParts(song, songs)) ? '' : song.title}
-          onConfirm={async (ids, name) => {
-            if (await updateMedley(song.id, ids, name)) {
+          initialCuts={song.medleyCuts}
+          onConfirm={async (ids, name, cuts) => {
+            if (await updateMedley(song.id, ids, name, cuts)) {
               toast.success('Medley atualizado')
+              setSheetOpen(null)
+            }
+          }}
+        />
+      )}
+      {medley && (
+        <MedleyTransitionsSheet
+          song={song}
+          open={sheetOpen === 'transitions'}
+          onClose={() => setSheetOpen(null)}
+          onSave={async (cuts) => {
+            if (await setMedleyCuts(song.id, cuts)) {
+              toast.success(cuts ? 'Trocas salvas: a cifra já mostra só os trechos 🔀' : 'Músicas inteiras de novo')
               setSheetOpen(null)
             }
           }}
@@ -446,7 +467,7 @@ function InfoRow({ label, children }: { label: string; children: ReactNode }) {
   )
 }
 
-function AboutTab({ song }: { song: Song }) {
+function AboutTab({ song, onEditTransitions }: { song: Song; onEditTransitions: () => void }) {
   const medley = isMedley(song)
   const profiles = useTable('profiles')
   const favorites = useRows('favorites')
@@ -460,7 +481,7 @@ function AboutTab({ song }: { song: Song }) {
 
   return (
     <div className="space-y-4">
-      {medley && <MedleyPartsList song={song} />}
+      {medley && <MedleyPartsList song={song} onEditTransitions={onEditTransitions} />}
       {song.meaning && (
         <Card className="p-5">
           <div className="mb-2 flex items-center gap-2 text-[13px] font-bold tracking-wide text-primary uppercase">
