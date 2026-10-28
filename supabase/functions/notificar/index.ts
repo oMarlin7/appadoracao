@@ -117,10 +117,10 @@ async function deliver(sends: Array<{ userId: string; payload: Payload; urgency:
 async function loadState(now: Date): Promise<State> {
   const since = new Date(now.getTime() - 2 * 86400_000).toISOString().slice(0, 10)
   const [teamRows, profiles, services, polls, announcements, notified] = await Promise.all([
-    rest<State['team'][]>('team_settings?id=eq.team&select=selection_mode,voting_picks,timezone'),
+    rest<State['team'][]>('team_settings?id=eq.team&select=selection_mode,voting_picks,voting_votes,timezone'),
     rest<ProfileRow[]>('profiles?select=id,name,functions,notify_prefs'),
     rest<ServiceRow[]>(`services?date=gte.${since}&select=id,title,kind,date,time,notes,items,team,updated_at`),
-    rest<PollRow[]>('song_polls?select=id,mode,picks,opens_at,closes_at,applied_at'),
+    rest<PollRow[]>('song_polls?select=id,mode,picks,max_votes,opens_at,closes_at,applied_at'),
     rest<AnnouncementRow[]>(`announcements?created_at=gte.${new Date(now.getTime() - 86400_000).toISOString()}&select=id,title,body,audience,ends_on,created_by,created_at`),
     rest<Array<{ key: string }>>('push_log?key=like.setlist:*&select=key'),
   ])
@@ -133,7 +133,7 @@ async function loadState(now: Date): Promise<State> {
   ])
   return {
     now,
-    team: teamRows[0] ?? { selection_mode: null, voting_picks: null, timezone: null },
+    team: teamRows[0] ?? { selection_mode: null, voting_picks: null, voting_votes: null, timezone: null },
     profiles,
     services,
     polls,

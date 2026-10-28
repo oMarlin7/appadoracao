@@ -61,6 +61,23 @@ describe('mesmas regras do app', () => {
     }
   })
 
+  it('músicas que entram e votos por pessoa iguais aos do app', () => {
+    const cases: Array<[number | null, number | null, number | null]> = [
+      [null, null, null],
+      [5, null, null],
+      [5, 1, null],
+      [null, null, 4],
+      [null, 2, 4],
+    ]
+    for (const [teamVotes, pollVotes, pollPicks] of cases) {
+      const row = svc()
+      const poll: SongPoll = { id: 'c1', mode: 'votacao', picks: pollPicks, maxVotes: pollVotes, opensAt: null, closesAt: null, appliedAt: null, createdBy: null, createdAt: '', updatedAt: '' }
+      const app = votingInfo({ id: row.id, date: row.date, kind: 'culto', title: row.title } as Service, { selectionMode: 'votacao', votingPicks: 3, votingVotes: teamVotes, timezone: 'America/Sao_Paulo' }, poll)
+      const fn = votingWindow(row, { selection_mode: 'votacao', voting_picks: 3, voting_votes: teamVotes, timezone: 'America/Sao_Paulo' }, { id: 'c1', mode: 'votacao', picks: pollPicks, max_votes: pollVotes, opens_at: null, closes_at: null, applied_at: null })
+      expect([fn.picks, fn.votes], JSON.stringify([teamVotes, pollVotes, pollPicks])).toEqual([app.picks, app.votes])
+    }
+  })
+
   it('tipo do evento, funções e público dos avisos iguais aos do app', () => {
     for (const title of ['Ensaio geral', 'Passagem de som', 'Reunião do ministério', 'Confraternização', 'Culto de Domingo', 'ENSAIO'])
       expect(eventKind({ kind: null, title })).toBe(appEventKind({ title }))
@@ -117,6 +134,9 @@ describe('votação', () => {
     expect(n[0].key).toBe(`votacao:c1:${br('2026-10-22', '12:00').toISOString()}`)
     expect(n[0].recipients.map((r) => r.userId)).toEqual(['ana', 'bia', 'caio'])
     expect(n[0].recipients[1].payload.body).toBe('Bia, escolha até 3 músicas para o Culto de Domingo (01/11). Fecha sábado, 24/10 às 12h.')
+    // Cada um vota em 3, mas entra 1.
+    const uma = planejar({ ...base, team: { ...base.team, voting_picks: 1, voting_votes: 3 }, now: br('2026-10-22', '12:01') }).filter((x) => x.kind === 'votacao')
+    expect(uma[0].recipients[1].payload.body).toBe('Bia, você tem 3 votos e entra a mais votada para o Culto de Domingo (01/11). Fecha sábado, 24/10 às 12h.')
     // Muito depois de abrir não avisa mais (o app já mostra a votação)
     expect(planejar({ ...base, now: br('2026-10-23', '09:00') }).filter((x) => x.kind === 'votacao')).toEqual([])
   })

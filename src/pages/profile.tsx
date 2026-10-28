@@ -51,7 +51,7 @@ import { pickFile } from '@/lib/images'
 import { cropImage } from '@/components/image-cropper'
 import { PushCard } from '@/components/push-settings'
 import { cn, copyText, downloadFile, firstName, plural, todayString } from '@/lib/utils'
-import { MAX_VOTING_PICKS } from '@/lib/voting'
+import { MAX_VOTES_PER_PERSON, MAX_VOTING_PICKS, votingRule } from '@/lib/voting'
 
 // ---------------------------------------------------------------------------
 // Perfil
@@ -226,6 +226,7 @@ function SongSelectionCard() {
   const team = useTeam()
   const mode = team?.selectionMode === 'votacao' ? 'votacao' : 'lider'
   const picks = team?.votingPicks ?? 2
+  const votes = team?.votingVotes ?? picks
   return (
     <Card className="mt-5 overflow-hidden">
       <div className="flex items-start gap-3 bg-orchid p-5 text-orchid-ink">
@@ -254,15 +255,32 @@ function SongSelectionCard() {
               Abre quinta às 12h · fecha sábado às 12h
             </div>
             <div className="flex flex-wrap items-center justify-between gap-3">
-              <div className="text-[13.5px] font-semibold text-ink-2">Músicas escolhidas</div>
+              <div>
+                <div className="text-[13.5px] font-semibold text-ink-2">Entram no setlist</div>
+                <div className="text-[12px] text-muted">As mais votadas</div>
+              </div>
               <Stepper
-                label="Músicas escolhidas na votação"
+                label="Músicas que entram no setlist"
                 value={picks}
                 max={MAX_VOTING_PICKS}
                 format={(n) => plural(n, 'música', 'músicas')}
                 onChange={(n) => void updateTeam({ votingPicks: n })}
               />
             </div>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div>
+                <div className="text-[13.5px] font-semibold text-ink-2">Votos por pessoa</div>
+                <div className="text-[12px] text-muted">Um voto por música</div>
+              </div>
+              <Stepper
+                label="Votos de cada pessoa"
+                value={votes}
+                max={MAX_VOTES_PER_PERSON}
+                format={(n) => plural(n, 'voto', 'votos')}
+                onChange={(n) => void updateTeam({ votingVotes: n })}
+              />
+            </div>
+            <p className="text-[12.5px] text-muted">{votingRule(votes, picks)} Dá para mudar em cada evento, na própria votação.</p>
           </>
         ) : null}
       </div>

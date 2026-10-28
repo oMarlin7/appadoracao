@@ -7,13 +7,15 @@ import type { Id, Service, SetlistItem, Song, SongPoll, Suggestion, TeamSettings
  * Regra semanal (quando o líder escolhe "votação"): o ensaio é a quinta antes do evento; a
  * votação fecha no sábado 12h anterior a esse ensaio e abre dois dias antes (quinta 12h).
  * Para um culto de domingo: abre na quinta 12h (10 dias antes) e fecha no sábado 12h
- * (8 dias antes), a tempo do ensaio de quinta. O líder pode mudar prazo e quantidade por
- * evento, ou escolher direto. (Mesma regra de voting_window no banco.)
+ * (8 dias antes), a tempo do ensaio de quinta. O líder define quantas músicas entram e em
+ * quantas cada pessoa vota (ex.: cada um vota em 3, entra 1); pode mudar prazo e quantidades
+ * por evento, ou escolher direto. (Mesma regra de voting_window e voting_votes no banco.)
  */
 
 export const DEFAULT_TIMEZONE = 'America/Sao_Paulo'
-/** Quantas músicas a votação pode escolher (o mesmo limite do banco). */
+/** Quantas músicas a votação pode escolher, e em quantas cada pessoa pode votar (o mesmo limite do banco). */
 export const MAX_VOTING_PICKS = 20
+export const MAX_VOTES_PER_PERSON = 20
 
 function tzOffsetMinutes(at: Date, timeZone: string): number {
   const parts = new Intl.DateTimeFormat('en-US', {
@@ -63,7 +65,10 @@ export interface VotingInfo {
   opensAt: Date
   closesAt: Date
   rehearsal: string
+  /** Quantas músicas a votação escolhe. */
   picks: number
+  /** Em quantas músicas cada pessoa pode votar (um voto por música). */
+  votes: number
   applied: boolean
   /** O líder mudou algo só para este evento. */
   custom: boolean
@@ -71,7 +76,7 @@ export interface VotingInfo {
 
 export function votingInfo(
   service: Pick<Service, 'id' | 'date' | 'kind' | 'title'>,
-  team: Pick<TeamSettings, 'selectionMode' | 'votingPicks' | 'timezone'> | undefined,
+  team: Pick<TeamSettings, 'selectionMode' | 'votingPicks' | 'votingVotes' | 'timezone'> | undefined,
   poll: SongPoll | undefined,
   now: Date = new Date(),
 ): VotingInfo {
@@ -82,15 +87,18 @@ export function votingInfo(
   const mode = poll?.mode ?? (team?.selectionMode === 'votacao' ? 'votacao' : 'lider')
   const enabled = isPresentation(service) && mode === 'votacao'
   const phase: VotingPhase = !enabled ? 'off' : now < opensAt ? 'agendada' : now < closesAt ? 'aberta' : 'encerrada'
+  const picks = poll?.picks ?? team?.votingPicks ?? 2
   return {
     enabled,
     phase,
     opensAt,
     closesAt,
     rehearsal,
-    picks: poll?.picks ?? team?.votingPicks ?? 2,
+    picks,
+    // Sem número próprio, cada um vota em tantas quantas entram (mesma regra de voting_votes no banco).
+    votes: poll?.maxVotes ?? team?.votingVotes ?? picks,
     applied: !!poll?.appliedAt,
-    custom: !!poll && (poll.opensAt !== null || poll.closesAt !== null || poll.picks !== null || poll.mode === 'lider'),
+    custom: !!poll && (poll.opensAt !== null || poll.closesAt !== null || poll.picks !== null || (poll.maxVotes ?? null) !== null || poll.mode === 'lider'),
   }
 }
 
@@ -161,6 +169,16 @@ export function itemsFromWinners(current: SetlistItem[], win: Candidate[], songs
       notes: 'Escolhida na votação',
     }))
   return [...current, ...added]
+}
+
+/**
+ * A regra em uma frase: "Cada um tem 3 votos · a mais votada entra no setlist." (sem repetir
+ * quando os números são iguais: "Escolha até 2 músicas: as mais votadas entram no setlist.")
+ */
+export function votingRule(votes: number, picks: number): string {
+  const enter = picks === 1 ? 'a mais votada entra' : `as ${picks} mais votadas entram`
+  if (votes === picks) return `Escolha até ${votes === 1 ? '1 música' : `${votes} músicas`}: ${enter} no setlist.`
+  return `Cada um tem ${votes === 1 ? '1 voto' : `${votes} votos`} · ${enter} no setlist.`
 }
 
 /** "2d 4h", "5h 20min", "12 min" */

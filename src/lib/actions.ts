@@ -583,7 +583,7 @@ export function pollInfo(serviceId: Id, now = new Date()) {
   return svc ? votingInfo(svc, data.team_settings.team, data.song_polls[serviceId], now) : null
 }
 
-/** Vota (ou tira o voto) numa música sugerida. Cada um vota em até N músicas. */
+/** Vota (ou tira o voto) numa música sugerida. Cada um tem N votos, um por música. */
 export async function toggleVote(serviceId: Id, songId: Id): Promise<boolean> {
   const userId = me()
   const data = getData()
@@ -595,16 +595,16 @@ export async function toggleVote(serviceId: Id, songId: Id): Promise<boolean> {
   const id = voteId(serviceId, userId, songId)
   if (data.votes[id]) return destroy('votes', id)
   const mine = Object.values(data.votes).filter((v) => v.serviceId === serviceId && v.userId === userId)
-  if (mine.length >= info.picks) {
-    toast(`Você já escolheu ${info.picks} músicas`, { description: 'Toque numa delas para tirar o voto e trocar.' })
+  if (mine.length >= info.votes) {
+    toast(info.votes === 1 ? 'Você já usou seu voto' : `Você já usou seus ${info.votes} votos`, { description: 'Toque numa delas para tirar o voto e trocar.' })
     return false
   }
   const vote: Vote = { id, serviceId, userId, songId, createdAt: nowIso() }
   return save('votes', vote)
 }
 
-/** O líder ajusta a votação deste evento (modo, quantidade, prazo). */
-export async function setPoll(serviceId: Id, patch: Partial<Pick<SongPoll, 'mode' | 'picks' | 'opensAt' | 'closesAt' | 'appliedAt'>>) {
+/** O líder ajusta a votação deste evento (modo, músicas que entram, votos por pessoa, prazo). */
+export async function setPoll(serviceId: Id, patch: Partial<Pick<SongPoll, 'mode' | 'picks' | 'maxVotes' | 'opensAt' | 'closesAt' | 'appliedAt'>>) {
   if (!leaderOnly()) return false
   const prev = getData().song_polls[serviceId]
   const now = nowIso()

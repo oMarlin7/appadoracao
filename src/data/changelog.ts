@@ -25,6 +25,18 @@ export interface Release {
 
 export const RELEASES: Release[] = [
   {
+    id: '2026-10-28c',
+    items: [
+      {
+        emoji: '🗳️',
+        kind: 'novo',
+        color: 'peach',
+        title: 'Mais votos que músicas',
+        text: 'Agora são dois números: quantas músicas entram e quantos votos cada um tem (dá pra votar em 3 e entrar só 1). Quem lidera ajusta em **Perfil → Equipe e convites** ou na própria votação do evento.',
+      },
+    ],
+  },
+  {
     id: '2026-10-28b',
     items: [
       {

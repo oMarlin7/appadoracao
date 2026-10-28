@@ -49,6 +49,7 @@ export interface PollRow {
   id: string
   mode: 'votacao' | 'lider'
   picks: number | null
+  max_votes?: number | null
   opens_at: string | null
   closes_at: string | null
   applied_at: string | null
@@ -66,7 +67,7 @@ export interface AnnouncementRow {
 
 export interface State {
   now: Date
-  team: { selection_mode: string | null; voting_picks: number | null; timezone: string | null }
+  team: { selection_mode: string | null; voting_picks: number | null; voting_votes?: number | null; timezone: string | null }
   profiles: ProfileRow[]
   services: ServiceRow[]
   polls: PollRow[]
@@ -192,7 +193,10 @@ export function votingWindow(service: ServiceRow, team: State['team'], poll: Pol
   const closesAt = poll?.closes_at ? new Date(poll.closes_at) : zonedTime(shiftDay(rehearsal, -5), 12, 0, tz)
   const opensAt = poll?.opens_at ? new Date(poll.opens_at) : zonedTime(shiftDay(rehearsal, -7), 12, 0, tz)
   const mode = poll?.mode ?? (team.selection_mode === 'votacao' ? 'votacao' : 'lider')
-  return { enabled: isPresentation(service) && mode === 'votacao', opensAt, closesAt, picks: poll?.picks ?? team.voting_picks ?? 2, applied: !!poll?.applied_at }
+  const picks = poll?.picks ?? team.voting_picks ?? 2
+  // Em quantas músicas cada pessoa vota (sem número próprio, tantas quantas entram).
+  const votes = poll?.max_votes ?? team.voting_votes ?? picks
+  return { enabled: isPresentation(service) && mode === 'votacao', opensAt, closesAt, picks, votes, applied: !!poll?.applied_at }
 }
 
 export const ROLE_NAMES: Record<string, string> = {
@@ -300,7 +304,7 @@ export function planejar(s: State, opts: { ignoreQuiet?: boolean } = {}): Planne
               userId: p.id,
               payload: {
                 title: 'A votação abriu',
-                body: `${firstName(p)}, escolha até ${plural(w.picks, 'música', 'músicas')} para o ${v.title} (${ddmm(v.date)}). Fecha ${closes}.`,
+                body: `${firstName(p)}, ${w.votes === w.picks ? `escolha até ${plural(w.picks, 'música', 'músicas')}` : `você tem ${plural(w.votes, 'voto', 'votos')} e ${w.picks === 1 ? 'entra a mais votada' : `entram as ${w.picks} mais votadas`}`} para o ${v.title} (${ddmm(v.date)}). Fecha ${closes}.`,
                 tag: `votacao-${v.id}`,
                 url: `/cultos/${v.id}`,
                 image: art('votacao'),

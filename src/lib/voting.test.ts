@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { eventKind, isPresentation } from './events'
 import { buildInbox } from './inbox'
-import { itemsFromWinners, rehearsalDay, tally, tieAtCutoff, votingInfo, winners, zonedTime } from './voting'
+import { itemsFromWinners, rehearsalDay, tally, tieAtCutoff, votingInfo, votingRule, winners, zonedTime } from './voting'
 import type { Attendance, Profile, Service, SongPoll, Suggestion, TeamSettings, Vote } from '@/types'
 
 const svc = (over: Partial<Service> = {}): Service => ({
@@ -70,6 +70,37 @@ describe('janela da votação', () => {
     const poll: SongPoll = { id: 'c1', mode: 'votacao', picks: 3, opensAt: '2026-10-20T10:00:00Z', closesAt: '2026-10-22T10:00:00Z', appliedAt: null, createdBy: null, createdAt: '', updatedAt: '' }
     const info = votingInfo(svc(), { ...team, selectionMode: 'lider' }, poll, new Date('2026-10-21T00:00:00Z'))
     expect(info).toMatchObject({ enabled: true, phase: 'aberta', picks: 3, custom: true })
+  })
+})
+
+describe('músicas que entram e votos por pessoa', () => {
+  const poll = (over: Partial<SongPoll> = {}): SongPoll => ({ id: 'c1', mode: 'votacao', picks: null, maxVotes: null, opensAt: null, closesAt: null, appliedAt: null, createdBy: null, createdAt: '', updatedAt: '', ...over })
+
+  it('sem número próprio, cada um vota em tantas quantas entram (como antes)', () => {
+    expect(votingInfo(svc(), team, undefined)).toMatchObject({ picks: 2, votes: 2 })
+    expect(votingInfo(svc(), team, poll({ picks: 4 }))).toMatchObject({ picks: 4, votes: 4 })
+  })
+
+  it('a equipe pode dar mais votos do que músicas: cada um vota em 3, entra 1', () => {
+    const t = { ...team, votingPicks: 1, votingVotes: 3 }
+    expect(votingInfo(svc(), t, undefined)).toMatchObject({ picks: 1, votes: 3 })
+    // O evento pode ter os próprios números.
+    expect(votingInfo(svc(), t, poll({ maxVotes: 1 }))).toMatchObject({ picks: 1, votes: 1, custom: true })
+    expect(votingInfo(svc(), t, poll({ picks: 2 }))).toMatchObject({ picks: 2, votes: 3 })
+  })
+
+  it('a apuração escolhe só as que entram, mesmo com vários votos por pessoa', () => {
+    const s = [sug('a', 's1', 'ana', '2026-10-15T16:00:00Z'), sug('b', 's2', 'bia', '2026-10-15T17:00:00Z'), sug('c', 's3', 'caio', '2026-10-15T18:00:00Z')]
+    // Cada um votou em 3 (ou 2): s2 tem 3 votos, s1 e s3 têm 2.
+    const v = [vote('ana', 's1'), vote('ana', 's2'), vote('ana', 's3'), vote('bia', 's2'), vote('bia', 's3'), vote('caio', 's2'), vote('caio', 's1')]
+    expect(winners(tally('c1', s, v), 1).map((c) => c.songId)).toEqual(['s2'])
+  })
+
+  it('a regra em uma frase', () => {
+    expect(votingRule(3, 1)).toBe('Cada um tem 3 votos · a mais votada entra no setlist.')
+    expect(votingRule(1, 2)).toBe('Cada um tem 1 voto · as 2 mais votadas entram no setlist.')
+    expect(votingRule(2, 2)).toBe('Escolha até 2 músicas: as 2 mais votadas entram no setlist.')
+    expect(votingRule(1, 1)).toBe('Escolha até 1 música: a mais votada entra no setlist.')
   })
 })
 

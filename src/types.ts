@@ -234,6 +234,8 @@ export interface TeamSettings {
   selectionMode?: 'lider' | 'votacao'
   /** Quantas músicas saem da votação (normalmente 2, às vezes 3). */
   votingPicks?: number
+  /** Em quantas músicas cada pessoa vota (sem valor = o mesmo número de músicas escolhidas). */
+  votingVotes?: number | null
   /** Fuso dos horários da votação (quinta 12h → sábado 12h). */
   timezone?: string
   updatedAt: string
@@ -248,6 +250,8 @@ export interface SongPoll {
   /** 'lider' = o líder escolheu direto para este evento (sem votação). */
   mode: 'votacao' | 'lider'
   picks: number | null
+  /** Votos por pessoa só neste evento (null = o da equipe). */
+  maxVotes?: number | null
   /** Datas personalizadas (null = regra semanal). */
   opensAt: string | null
   closesAt: string | null

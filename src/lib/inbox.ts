@@ -2,7 +2,7 @@ import { hasStarted, isJustified, memberStats } from './attendance'
 import { EVENT_KIND_BY_ID, eventKind, isPresentation } from './events'
 import { ABSENCE_REASON_BY_ID, ROLE_BY_ID, type Pastel } from './taxonomy'
 import { addDays, daysBetween, firstName, parseLocalDate, plural, toLocalDateString, weekdayName } from './utils'
-import { formatDeadline, tally, timeLeft, votingInfo, winners } from './voting'
+import { formatDeadline, tally, timeLeft, votingInfo, votingRule, winners } from './voting'
 import type { Announcement, Attendance, Id, Profile, Service, Song, SongPoll, Suggestion, TeamSettings, Vote } from '@/types'
 
 /**
@@ -164,7 +164,7 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
     const mine = ctx.votes.filter((v) => v.serviceId === s.id && v.userId === me.id)
     const suggested = ctx.suggestions.some((g) => g.serviceId === s.id && g.userId === me.id)
     if (info.phase === 'aberta') {
-      if (mine.length < info.picks && cands.length) {
+      if (mine.length < info.votes && cands.length) {
         items.push({
           id: `votar:${s.id}:${mine.length}`,
           kind: 'votar',
@@ -172,8 +172,8 @@ export function buildInbox(ctx: InboxContext): InboxItem[] {
           color: 'orchid',
           icon: 'vote',
           eyebrow: `Votação · ${s.title}`,
-          title: mine.length ? `Falta ${info.picks - mine.length === 1 ? '1 voto' : `${info.picks - mine.length} votos`}, ${first}!` : `${first}, sua voz conta! Vote nas músicas`,
-          body: `Escolha até ${info.picks} entre ${plural(cands.length, 'sugestão', 'sugestões')} para ${shortDate(s.date)}. Fecha ${formatDeadline(info.closesAt, ctx.team?.timezone)} (faltam ${timeLeft(info.closesAt, now)}).`,
+          title: mine.length ? `Falta ${info.votes - mine.length === 1 ? '1 voto' : `${info.votes - mine.length} votos`}, ${first}!` : `${first}, sua voz conta! Vote nas músicas`,
+          body: `${votingRule(info.votes, info.picks)} São ${plural(cands.length, 'sugestão', 'sugestões')} para ${shortDate(s.date)}. Fecha ${formatDeadline(info.closesAt, ctx.team?.timezone)} (faltam ${timeLeft(info.closesAt, now)}).`,
           cta: { label: 'Votar agora', to: `/cultos/${s.id}#votacao` },
           visual: { type: 'countdown', to: info.closesAt.toISOString() },
         })

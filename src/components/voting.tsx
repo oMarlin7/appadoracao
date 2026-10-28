@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { Link, useLocation } from 'react-router'
 import { motion } from 'motion/react'
 import { toast } from 'sonner'
@@ -13,7 +13,7 @@ import { applyPoll, closePollNow, openPollNow, setPoll, suggestSong, toggleVote 
 import { isPresentation } from '@/lib/events'
 import { useIsAdmin, useMe, useRow, useRows, useTable } from '@/lib/store'
 import { cn, compact, firstName, plural } from '@/lib/utils'
-import { MAX_VOTING_PICKS, formatDeadline, tally, tieAtCutoff, timeLeft, votingActive, votingInfo, winners } from '@/lib/voting'
+import { MAX_VOTES_PER_PERSON, MAX_VOTING_PICKS, formatDeadline, tally, tieAtCutoff, timeLeft, votingActive, votingInfo, votingRule, winners } from '@/lib/voting'
 import type { Service } from '@/types'
 
 /** Leva o resultado das votações encerradas para o setlist (roda em qualquer aparelho da equipe). */
@@ -49,6 +49,19 @@ function useNow(ms = 30_000) {
 }
 
 const PHASE_LABEL = { agendada: 'Abre em breve', aberta: 'Aberta', encerrada: 'Encerrada', off: '' }
+
+/** Um número da votação que o líder ajusta: o nome à esquerda, o seletor à direita. */
+function VotingNumber({ label, hint, children }: { label: string; hint: string; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-3">
+      <div className="min-w-0">
+        <div className="text-[13px] font-bold text-ink">{label}</div>
+        <div className="text-[11.5px] text-muted">{hint}</div>
+      </div>
+      {children}
+    </div>
+  )
+}
 
 export function ServiceVoting({ service }: { service: Service }) {
   const me = useMe()
@@ -120,8 +133,9 @@ export function ServiceVoting({ service }: { service: Service }) {
                 </span>
               </div>
               <p className="mt-0.5 text-[13.5px] text-ink-2">
-                {open && `Escolha até ${info.picks} músicas. Fecha ${formatDeadline(info.closesAt, team?.timezone)} — faltam ${timeLeft(info.closesAt, now)}.`}
-                {info.phase === 'agendada' && `Abre ${formatDeadline(info.opensAt, team?.timezone)} e fecha ${formatDeadline(info.closesAt, team?.timezone)}. Já dá para sugerir!`}
+                {open && `${votingRule(info.votes, info.picks)} Fecha ${formatDeadline(info.closesAt, team?.timezone)} — faltam ${timeLeft(info.closesAt, now)}.`}
+                {info.phase === 'agendada' &&
+                  `Abre ${formatDeadline(info.opensAt, team?.timezone)} e fecha ${formatDeadline(info.closesAt, team?.timezone)}. ${votingRule(info.votes, info.picks)} Já dá para sugerir!`}
                 {closed &&
                   (win.length
                     ? `${plural(win.length, 'música escolhida', 'músicas escolhidas')} pela equipe para o ensaio de quinta.`
@@ -167,22 +181,37 @@ export function ServiceVoting({ service }: { service: Service }) {
             </div>
             {open && me && (
               <div className="flex items-center gap-1.5 text-[13px] font-semibold text-ink-2">
-                {Array.from({ length: info.picks }, (_, i) => (
+                {Array.from({ length: info.votes }, (_, i) => (
                   <span key={i} className={cn('size-3 rounded-full ring-2 ring-surface/70', i < mine.length ? 'bg-primary' : 'bg-surface-3')} />
                 ))}
-                <span className="ml-1">{mine.length === info.picks ? 'Seus votos estão completos' : `Você escolheu ${mine.length} de ${info.picks}`}</span>
+                <span className="ml-1">
+                  {mine.length >= info.votes ? (info.votes === 1 ? 'Seu voto está dado' : 'Seus votos estão completos') : `Você usou ${mine.length} de ${plural(info.votes, 'voto', 'votos')}`}
+                </span>
               </div>
             )}
-            {isLeader && !closed && (
-              <Stepper
-                label="Músicas escolhidas na votação"
-                value={info.picks}
-                max={MAX_VOTING_PICKS}
-                format={(n) => plural(n, 'música', 'músicas')}
-                onChange={(n) => void setPoll(service.id, { picks: n })}
-              />
-            )}
           </div>
+          {isLeader && !closed && (
+            <div className="mt-4 grid gap-2 rounded-2xl bg-surface/60 p-3 sm:grid-cols-2">
+              <VotingNumber label="Entram no setlist" hint="As mais votadas">
+                <Stepper
+                  label="Músicas que entram no setlist"
+                  value={info.picks}
+                  max={MAX_VOTING_PICKS}
+                  format={(n) => plural(n, 'música', 'músicas')}
+                  onChange={(n) => void setPoll(service.id, { picks: n })}
+                />
+              </VotingNumber>
+              <VotingNumber label="Votos por pessoa" hint="Um voto por música">
+                <Stepper
+                  label="Votos de cada pessoa"
+                  value={info.votes}
+                  max={MAX_VOTES_PER_PERSON}
+                  format={(n) => plural(n, 'voto', 'votos')}
+                  onChange={(n) => void setPoll(service.id, { maxVotes: n })}
+                />
+              </VotingNumber>
+            </div>
+          )}
         </div>
       </div>
 
