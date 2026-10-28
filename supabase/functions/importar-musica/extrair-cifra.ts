@@ -3,6 +3,8 @@
 // Extrai a cifra e a letra de uma página de cifra (Cifra Club, letras.mus.br e afins) e
 // devolve o texto no formato que o app já lê: acordes na linha de cima, letra embaixo,
 // seções entre colchetes. O texto é extraído da própria página citada — nunca inventado.
+// Cifra de violão com capotraste vem para o tom que soa (o tom da página), e as tablaturas
+// ficam de fora.
 //
 // O navegador não consegue buscar essas páginas (CORS e bloqueio anti-robô), então a
 // extração roda aqui, no servidor, e o app recebe só o texto pronto. A página certa vem da
@@ -160,31 +162,178 @@ function sourceOf(url: string): ExtractedSheet['source'] {
 }
 
 function finalize(content: string, source: ExtractedSheet['source']): ExtractedSheet {
-  const normalized = normalizeText(content)
+  const normalized = stripTabs(normalizeText(content))
   return { content: normalized, originalKey: keyFromText(normalized), bpm: bpmFromText(normalized), source, sourceUrl: null, title: null, artist: null }
+}
+
+// ---------------------------------------------------------------------------
+// Tablaturas (a equipe toca pelos acordes; a tablatura só polui a cifra)
+// ---------------------------------------------------------------------------
+
+/** "E|---2---|", "G|-5-7-| (2x)", "|-0-2-|" */
+const isTabLine = (line: string) => {
+  const t = line.trim()
+  return /^(?:[A-Ga-g][#b]?\s*)?\|/.test(t) && (t.match(/-/g)?.length ?? 0) >= 4
+}
+
+const SECTION_LINE_RE = /^\s*\[[^\]]+\]\s*$/
+
+/** "Riff 2" no meio dos acordes aponta para uma tablatura que saiu (null: a linha só tinha isso). */
+function dropTabMarks(line: string): string | null {
+  const rest = line.replace(/(?<=^|\s)(?:\(\s*)?(?:riff|tab)(?:\s+\d+)?(?:\s*\))?(?=\s|$)/gi, (m) => ' '.repeat(m.length))
+  if (rest === line) return line
+  if (!rest.trim()) return null
+  return hasChordLine(rest) ? rest : line
+}
+
+/**
+ * Tira as tablaturas e o que só servia a elas: "[Tab - Solo]", "Parte 1 de 3", a linha de acordes
+ * que marca o tempo logo em cima da tablatura, o "Riff 2" entre os acordes e as seções que ficaram
+ * vazias (ex.: "[Riff]", "[Dedilhado - Intro]").
+ */
+export function stripTabs(content: string): string {
+  const all = content.split('\n')
+  const lines = all
+    .filter((l, i) => {
+      if (isTabLine(l) || /^\s*\[?parte \d+ de \d+\]?\s*$/i.test(l) || /^\s*\[tab\b[^\]]*\]\s*$/i.test(l)) return false
+      return !(isTabLine(all[i + 1] ?? '') && !/^\s*\[/.test(l) && hasChordLine(l))
+    })
+    .flatMap((l) => {
+      const kept = dropTabMarks(l)
+      return kept === null ? [] : [kept]
+    })
+  const out: string[] = []
+  for (let i = 0; i < lines.length; i++) {
+    if (SECTION_LINE_RE.test(lines[i])) {
+      // Ex.: "[Riff]" que só tinha tablatura: nada até o próximo rótulo.
+      let j = i + 1
+      while (j < lines.length && !lines[j].trim()) j++
+      if (j === lines.length || /^\s*\[[^\]]+\]/.test(lines[j])) continue
+    }
+    out.push(lines[i])
+  }
+  return normalizeText(out.join('\n'))
+}
+
+// ---------------------------------------------------------------------------
+// Tom e capotraste (Cifra Club)
+// ---------------------------------------------------------------------------
+
+const SHARPS = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
+const FLATS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
+const PITCH: Record<string, number> = { C: 0, 'B#': 0, 'C#': 1, Db: 1, D: 2, 'D#': 3, Eb: 3, E: 4, Fb: 4, F: 5, 'E#': 5, 'F#': 6, Gb: 6, G: 7, 'G#': 8, Ab: 8, A: 9, 'A#': 10, Bb: 10, B: 11, Cb: 11 }
+/** Tons que se escrevem com bemol (os outros, com sustenido). */
+const FLAT_KEYS = new Set(['F', 'Bb', 'Eb', 'Ab', 'Db', 'Gb', 'Dm', 'Gm', 'Cm', 'Fm', 'Bbm', 'Ebm'])
+
+const usesFlats = (key: string | null) => !!key && FLAT_KEYS.has(key)
+
+function transposeNote(note: string, semitones: number, flats: boolean): string {
+  const pc = PITCH[note]
+  return pc === undefined ? note : (flats ? FLATS : SHARPS)[(pc + semitones + 120) % 12]
+}
+
+/** "F7M/C" +2 → "G7M/D". O que não é acorde (ex.: "(2x)") volta igual. */
+export function transposeChord(token: string, semitones: number, flats = false): string {
+  if (!semitones || !isChordToken(token)) return token
+  const wrapped = token.length > 2 && token.startsWith('(') && token.endsWith(')')
+  const m = /^([A-G][#b]?)(.*?)(?:\/([A-G][#b]?))?$/.exec(wrapped ? token.slice(1, -1) : token)
+  if (!m) return token
+  const out = transposeNote(m[1], semitones, flats) + m[2] + (m[3] ? `/${transposeNote(m[3], semitones, flats)}` : '')
+  return wrapped ? `(${out})` : out
+}
+
+/**
+ * Tom e capotraste que a página do Cifra Club mostra (os blocos #key e #capo, que o Jina devolve
+ * junto com a cifra). Com capotraste, os acordes estão escritos no desenho do violão (ex.: C com
+ * capotraste na 2ª casa) e o tom é o que soa (D).
+ */
+export function cifraClubSettings(html: string): { key: string | null; capo: number } {
+  const block = (id: string) => {
+    const start = html.search(new RegExp(`\\bid="${id}"`))
+    if (start < 0) return ''
+    const rest = html.slice(start)
+    const end = rest.slice(1).search(/\bid="(?:key|capo)"|<pre\b/)
+    return decodeEntities((end < 0 ? rest : rest.slice(0, end + 1)).replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ')
+  }
+  const key = /\bTom\s+([A-G][#b]?m?)(?![\w#])/.exec(block('key'))?.[1] ?? null
+  const capo = Number(/(\d{1,2})\s*[ªº°]?\s*casa/i.exec(block('capo'))?.[1] ?? 0)
+  return { key, capo: capo >= 1 && capo <= 11 ? capo : 0 }
 }
 
 // ---------------------------------------------------------------------------
 // 1) Bloco <pre> — Cifra Club (imprimir.html) e similares
 // ---------------------------------------------------------------------------
 
-/** Conteúdo de um <pre> → texto com as colunas dos acordes intactas. */
-function preHtmlText(inner: string): string {
-  return normalizeText(decodeEntities(inner.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')))
+/** Marcas em volta de cada acorde (o Cifra Club põe cada um num <b>) enquanto o HTML vira texto. */
+const CHORD_OPEN = '\u0001'
+const CHORD_CLOSE = '\u0002'
+
+/**
+ * Linha de acordes transposta: cada acorde fica na coluna de antes (em cima da mesma sílaba) ou,
+ * se o anterior cresceu e não deixa, logo depois dele. Numa linha com rótulo ("[Intro] C  G"),
+ * que não tem letra embaixo, valem os espaços entre os acordes.
+ */
+function placeChords(line: string, semitones: number, flats: boolean): string {
+  const keepGaps = /^\s*\[/.test(line)
+  let out = ''
+  let col = 0
+  let prevEnd = 0
+  for (const m of line.matchAll(/\u0001([^\u0002]*)\u0002|([^\u0001\s]+)|(\s+)/g)) {
+    if (m[3]) {
+      col += m[3].length
+      continue
+    }
+    const original = m[1] ?? m[2]
+    const text = m[1] !== undefined ? transposeChord(original.trim(), semitones, flats) : original
+    const at = keepGaps && out ? out.length + (col - prevEnd) : Math.max(col, out.length + (col > prevEnd && out ? 1 : 0))
+    out = out.padEnd(at) + text
+    col += original.length
+    prevEnd = col
+  }
+  return out
 }
 
-/** HTML que o Jina devolve com X-Return-Format: html e X-Target-Selector: pre. */
-export function jinaHtmlToSheet(html: string): string | null {
-  const text = preText(stripNonContent(html))
-  return text && looksLikeSheet(text) ? text : null
+/** Conteúdo de um <pre> → texto com as colunas dos acordes intactas (e, com capotraste, no tom que soa). */
+function preHtmlText(inner: string, semitones = 0, flats = false): string {
+  const marked = inner
+    // Cada tablatura vem num <span class="tab">: fica de fora.
+    .replace(/<span\b[^>]*\bclass="[^"]*\btab\b[^"]*"[^>]*>[\s\S]*?<\/span>/gi, '')
+    .replace(/<b\b[^>]*>([\s\S]*?)<\/b>/gi, (_, chord: string) => `${CHORD_OPEN}${chord.replace(/<[^>]+>/g, '')}${CHORD_CLOSE}`)
+  const text = decodeEntities(marked.replace(/<br\s*\/?>/gi, '\n').replace(/<[^>]+>/g, '')).replace(/[\u200b\ufeff]/g, '')
+  return normalizeText(
+    text
+      .split('\n')
+      .map((l) => (l.includes(CHORD_OPEN) ? placeChords(l, semitones, flats) : l))
+      .join('\n'),
+  )
 }
 
-function preText(html: string): string | null {
+/** A cifra lida de uma página, no tom que soa. */
+export interface PageSheet {
+  content: string
+  /** Tom informado pela página (null quando ela não diz). */
+  key: string | null
+  /** Casas que os acordes subiram (o capotraste que a página usava). */
+  capo: number
+}
+
+/**
+ * HTML que o Jina devolve com X-Return-Format: html e X-Target-Selector: #key, #capo, pre. Com
+ * capotraste, os acordes sobem para o tom que soa; as tablaturas ficam de fora.
+ */
+export function jinaHtmlToSheet(html: string): PageSheet | null {
+  const page = stripNonContent(html)
+  const { key, capo } = cifraClubSettings(page)
+  const text = preText(page, capo, usesFlats(key))
+  return text && looksLikeSheet(text) ? { content: stripTabs(text), key, capo } : null
+}
+
+function preText(html: string, semitones = 0, flats = false): string | null {
   const re = /<pre\b[^>]*>([\s\S]*?)<\/pre>/gi
   let m: RegExpExecArray | null
   let best: string | null = null
   while ((m = re.exec(html))) {
-    const text = preHtmlText(m[1])
+    const text = preHtmlText(m[1], semitones, flats)
     if (looksLikeSheet(text) && (!best || text.length > best.length)) best = text
   }
   return best
@@ -496,12 +645,20 @@ export function jinaMarkdownToSheet(md: string): string {
 
 /**
  * Lê a página por um navegador real (Jina). `html` mantém os espaços e as quebras de linha do
- * <pre>, ou seja, a posição de cada acorde; o `markdown` junta a linha dos acordes com a da letra.
+ * <pre>, ou seja, a posição de cada acorde, e traz junto o tom e o capotraste da página; o
+ * `markdown` junta a linha dos acordes com a da letra.
  */
 async function fetchJina(url: string, format: 'html' | 'markdown', ms: number): Promise<{ status: number; text: string | null }> {
   try {
     const res = await fetch(`https://r.jina.ai/${url}`, {
-      headers: { 'User-Agent': UA, Accept: 'text/plain', 'X-Return-Format': format, 'X-Target-Selector': 'pre' },
+      headers: {
+        'User-Agent': UA,
+        Accept: 'text/plain',
+        'X-Return-Format': format,
+        'X-Target-Selector': format === 'html' ? '#key, #capo, pre' : 'pre',
+        // O cache do Jina não separa por seletor: uma leitura antiga, só do <pre>, viria sem o capotraste.
+        ...(format === 'html' ? { 'X-No-Cache': 'true' } : {}),
+      },
       signal: AbortSignal.timeout(ms),
     })
     if (!res.ok) {
@@ -521,24 +678,26 @@ async function fetchJina(url: string, format: 'html' | 'markdown', ms: number): 
  * Cifra de uma página: o HTML do <pre>, com cada acorde na coluna certa. Se o Jina não
  * responder em HTML, tenta o markdown (os acordes ficam na linha certa, mas sem a coluna).
  */
-async function readSheet(url: string, ms = 25_000): Promise<string | null> {
+async function readSheet(url: string, ms = 25_000): Promise<PageSheet | null> {
   const html = await fetchJina(url, 'html', ms)
   if (html.text) return jinaHtmlToSheet(html.text)
   // A página não existe (ou não tem cifra): o markdown daria no mesmo.
   if (html.status === 404 || html.status === 422) return null
   const md = await fetchJina(url, 'markdown', ms)
   const content = md.text ? jinaMarkdownToSheet(md.text) : null
-  return content && looksLikeSheet(content) ? content : null
+  return content && looksLikeSheet(content) ? { content: stripTabs(content), key: null, capo: 0 } : null
 }
 
 /** Cifra+letra de uma página conhecida (ex.: a que a pesquisa da IA citou). */
 export async function sheetFromPage(url: string, ms = 25_000, page?: CifraPage): Promise<ExtractedSheet | null> {
-  const content = await readSheet(url, ms)
-  if (!content) return null
-  console.log(`[cifra] fonte: jina — ${url}`)
+  const read = await readSheet(url, ms)
+  if (!read) return null
+  const { content, key, capo } = read
+  console.log(`[cifra] fonte: jina — ${url}${key ? ` — tom ${key}` : ''}${capo ? ` (acordes +${capo}: a página usava capotraste na ${capo}ª casa)` : ''}`)
   return {
     content,
-    originalKey: keyFromText(content),
+    // O tom que a página informa vale mais que o adivinhado pelos acordes.
+    originalKey: key ?? keyFromText(content),
     bpm: bpmFromText(content),
     source: sourceOf(url),
     sourceUrl: url,

@@ -243,19 +243,20 @@ export function SongEditorPage() {
     }
     const title = r.title || song.title
     const artist = r.artist || song.artist
+    const key = normalizeKeyName(r.originalKey) ?? (a.key ? normalizeKeyName(a.key) : null)
     setSheetSource(r.sourceUrl)
     applyAuto(
       compactPatch({
         title: r.title ?? undefined,
         artist: r.artist ?? undefined,
         content: a.content,
-        originalKey: a.key ? normalizeKeyName(a.key) : undefined,
+        originalKey: key ?? undefined,
         bpm: a.bpm ?? undefined,
         tempo: tempoFromBpm(a.bpm) ?? undefined,
       }),
     )
     toast.success(a.chordCount ? 'Cifra e letra importadas' : 'Letra importada', {
-      description: compactJoin([hostOf(r.sourceUrl) && `Fonte: ${hostOf(r.sourceUrl)}`, a.key && `Tom ${a.key}`, a.chordCount ? `${a.chordCount} acordes` : 'sem acordes']),
+      description: compactJoin([hostOf(r.sourceUrl) && `Fonte: ${hostOf(r.sourceUrl)}`, key && `Tom ${key}`, a.chordCount ? `${a.chordCount} acordes` : 'sem acordes']),
     })
     if (analysis.source !== 'ia') void runAnalysis({ title, artist, content: a.content, bpm: song.bpm ?? a.bpm ?? null, tempo: song.tempo }, true)
   }
@@ -267,6 +268,9 @@ export function SongEditorPage() {
     if (d?.content) setSheetSource(d.sourceUrl)
     if (!d?.ia) {
       if (d?.content) applyImportedSheet(d.content)
+      // O tom que a página da cifra informa vale mais que o adivinhado pelos acordes.
+      const pageKey = d?.content ? normalizeKeyName(d.originalKey) : null
+      if (pageKey) applyAuto({ originalKey: pageKey })
       if (d?.bpm) applyAuto({ bpm: d.bpm })
       void runAnalysis({ title: d?.title || c.title, artist: d?.artist || c.artist, content: d?.content ?? '', bpm: d?.bpm ?? null, tempo: null }, false)
       return
@@ -755,7 +759,8 @@ async function batchSong(it: BatchItem): Promise<Song> {
     youtubeUrl: it.link.provider === 'youtube' ? it.link.url : null,
     spotifyUrl: it.link.provider === 'spotify' ? it.link.url : null,
     content,
-    originalKey: content && a?.key ? normalizeKeyName(a.key) : null,
+    // O tom que a página da cifra informa; sem ele, o adivinhado pelos acordes.
+    originalKey: content ? ((sheet?.ok ? normalizeKeyName(sheet.originalKey) : null) ?? (a?.key ? normalizeKeyName(a.key) : null)) : null,
     bpm: a?.bpm ?? null,
     tempo: tempoFromBpm(a?.bpm ?? null),
     themes,

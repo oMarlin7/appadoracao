@@ -22,7 +22,7 @@ const BOOKS: Record<string, number> = {
 export function isBibleRef(ref: string): boolean {
   const t = ref
     .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '')
+    .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/\s+/g, ' ')
     .trim()

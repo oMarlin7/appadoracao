@@ -552,6 +552,8 @@ async function complete(input: CompleteInput) {
     artist: pages[0]?.artist ?? null,
     content: sheet?.content ?? null,
     sourceUrl: sheet?.sourceUrl ?? null,
+    // O tom da cifra, como a página informa (a cifra já vem nele, sem capotraste).
+    originalKey: sheet?.originalKey ?? null,
   }
   if (!key) return { ...base, aiError: 'sem-chave' }
 
